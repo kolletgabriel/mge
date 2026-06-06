@@ -1,7 +1,10 @@
-import os
+from base64 import b64encode
+from collections.abc import Iterator
+from json import dumps
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from itsdangerous import TimestampSigner
 from pytest import fixture
 from testcontainers.postgres import PostgresContainer
 
@@ -23,6 +26,25 @@ def init_test_db():
 
 
 @fixture(scope='session')
-def test_client():
+def test_client() -> Iterator[TestClient]:
     with TestClient(app) as c:
         yield c
+
+
+@fixture(scope='session')
+def signed_session_token() -> str:
+    return TimestampSigner(str(Settings.SESSION_SECRET)).sign(
+        b64encode(dumps({'some': 'data'}).encode('utf-8'))
+    ).decode('utf-8')
+
+
+@fixture
+def authed_test_client(
+    test_client,
+    signed_session_token
+) -> Iterator[TestClient]:
+    test_client.cookies['session'] = signed_session_token
+
+    yield test_client
+
+    del test_client.cookies['session']
