@@ -17,6 +17,8 @@ async def login(
     hash_tool: HashToolDep,
     creds: Credentials,
 ) -> None:
+    req.session.clear()  # garante sessão nova
+
     result = (await conn.execute(
         text(
             '''
