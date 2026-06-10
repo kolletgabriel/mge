@@ -1,10 +1,12 @@
+from uuid import uuid4
+
 from argon2.exceptions import VerifyMismatchError
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import text
 
-from back.dependencies import ConnDep, HashToolDep
-from back.models import Credentials
+from back.dependencies import ConnDep, HashToolDep, RawSessionDep
+from back.models import Credentials, SessionData
 
 
 router = APIRouter()
@@ -12,17 +14,17 @@ router = APIRouter()
 
 @router.post('/login', status_code=204)
 async def login(
-    req: Request,
+    sess: RawSessionDep,
     conn: ConnDep,
     hash_tool: HashToolDep,
     creds: Credentials,
 ) -> None:
-    req.session.clear()  # garante sessão nova
+    sess.clear()  # garante sessão nova
 
     result = (await conn.execute(
         text(
             '''
-            SELECT id, name, hashed_password, role_id
+            SELECT id, hashed_password, role_id
             FROM users
             WHERE mail = :mail;
             '''
@@ -36,10 +38,24 @@ async def login(
             await run_in_threadpool(hasher.verify, dummy_hash, creds.password)
             raise VerifyMismatchError  # garante
 
-        user_id, user_name, user_hpw, user_role = result
+        user_id, user_hpw, user_role = result
         await run_in_threadpool(hasher.verify, user_hpw, creds.password)
 
     except VerifyMismatchError:
         raise HTTPException(status_code=401)
 
-    req.session.update(id=user_id, name=user_name, role=user_role)
+    session_id = uuid4()
+    await conn.execute(
+        text(
+            '''
+            INSERT INTO auth_sessions(id, user_id)
+            VALUES (:sid, :uid);
+            '''
+        ).bindparams(sid=session_id, uid=user_id)
+    )
+
+    sess.update(
+        uid = user_id,
+        rid = user_role,
+        sid = str(session_id)
+    )

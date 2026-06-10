@@ -11,6 +11,17 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    id UUID NOT NULL DEFAULT uuidv4(),
+    user_id INT8 NOT NULL,
+    revoked_at TIMESTAMPTZ,
+
+    PRIMARY KEY (id),
+    UNIQUE (id, user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+
 CREATE TABLE IF NOT EXISTS classes (
     id INT8 GENERATED ALWAYS AS IDENTITY,
     title TEXT NOT NULL UNIQUE,

@@ -86,6 +86,7 @@ async def test_seed_admin_and_schema_objects_exist(db_engine):
 
     assert {
         'users',
+        'auth_sessions',
         'classes',
         'class_professors',
         'class_assistants',
@@ -96,6 +97,51 @@ async def test_seed_admin_and_schema_objects_exist(db_engine):
     } <= tables
     assert 'session_applicants_status' in views
     assert admin_role == 0
+
+
+@mark.anyio
+async def test_auth_sessions_enforce_user_fk_uuid_default_and_revocation(db_engine):
+    async with db_engine.begin() as conn:
+        user_id = await insert_user(conn, 'schema-auth-session@example.com')
+        row = (
+            await conn.execute(
+                text(
+                    '''
+                    INSERT INTO auth_sessions(user_id)
+                    VALUES (:user_id)
+                    RETURNING id, revoked_at;
+                    '''
+                ),
+                {'user_id': user_id},
+            )
+        ).one()
+
+        assert row.id is not None
+        assert row.revoked_at is None
+
+        revoked_at = await conn.scalar(
+            text(
+                '''
+                UPDATE auth_sessions
+                SET revoked_at = '2030-01-01 10:00Z'
+                WHERE id = :session_id
+                RETURNING revoked_at;
+                '''
+            ),
+            {'session_id': row.id},
+        )
+
+    assert revoked_at is not None
+
+    await assert_integrity_error(
+        db_engine,
+        'INSERT INTO auth_sessions(user_id) VALUES (99999999);',
+    )
+    await assert_integrity_error(
+        db_engine,
+        'INSERT INTO auth_sessions(id, user_id) VALUES (:session_id, :user_id);',
+        {'session_id': row.id, 'user_id': user_id},
+    )
 
 
 @mark.anyio

@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
 from pytest import fixture
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from testcontainers.postgres import PostgresContainer
 
@@ -41,10 +42,24 @@ def test_client() -> Iterator[TestClient]:
         yield c
 
 
-@fixture(scope='session')
-def signed_session_token() -> str:
+@fixture
+async def signed_session_token(db_engine: AsyncEngine) -> str:
+    sess_data: dict[str, int | str] = {'uid': 1, 'rid': 0}
+    async with db_engine.begin() as conn:
+        sid = (await conn.execute(
+            text(
+                '''
+                INSERT INTO auth_sessions
+                VALUES(DEFAULT, :uid)
+                RETURNING id;
+                '''
+            ).bindparams(uid=sess_data['uid'])
+        )).scalar()
+
+    sess_data.update({'sid': str(sid)})
+
     return TimestampSigner(str(Settings.SESSION_SECRET)).sign(
-        b64encode(dumps({'some': 'data'}).encode('utf-8'))
+        b64encode(dumps(sess_data).encode('utf-8'))
     ).decode('utf-8')
 
 
