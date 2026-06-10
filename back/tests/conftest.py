@@ -1,11 +1,12 @@
 from base64 import b64encode
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from json import dumps
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
 from pytest import fixture
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from testcontainers.postgres import PostgresContainer
 
 from back import app, Settings
@@ -23,6 +24,15 @@ def init_test_db():
         Settings.DB_URL = pg.get_connection_url()
 
         yield
+
+
+@fixture
+async def db_engine() -> AsyncIterator[AsyncEngine]:
+    engine = create_async_engine(Settings.DB_URL)
+
+    yield engine
+
+    await engine.dispose()
 
 
 @fixture(scope='session')

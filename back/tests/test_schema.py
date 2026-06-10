@@ -1,20 +1,7 @@
-from collections.abc import AsyncIterator
-
 from pytest import fixture, mark, raises
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection, AsyncEngine
-
-from back import Settings
-
-
-@fixture
-async def db_engine() -> AsyncIterator[AsyncEngine]:
-    engine = create_async_engine(Settings.DB_URL)
-
-    yield engine
-
-    await engine.dispose()
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 
 async def insert_user(conn: AsyncConnection, mail: str, role_id: int = 1) -> int:
