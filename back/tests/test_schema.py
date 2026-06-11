@@ -1,57 +1,7 @@
-from pytest import fixture, mark, raises
+from pytest import mark
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-
-async def insert_user(conn: AsyncConnection, mail: str, role_id: int = 1) -> int:
-    return await conn.scalar(
-        text(
-            '''
-            INSERT INTO users(mail, name, hashed_password, role_id)
-            VALUES (:mail, :name, 'hash', :role_id)
-            RETURNING id;
-            '''
-        ),
-        {'mail': mail, 'name': mail, 'role_id': role_id},
-    )
-
-
-async def insert_class(conn: AsyncConnection, title: str) -> int:
-    return await conn.scalar(
-        text(
-            '''
-            INSERT INTO classes(title)
-            VALUES (:title)
-            RETURNING id;
-            '''
-        ),
-        {'title': title},
-    )
-
-
-async def insert_review_session(
-    conn: AsyncConnection,
-    class_id: int,
-    *,
-    max_participants: int = 5,
-) -> int:
-    return await conn.scalar(
-        text(
-            '''
-            INSERT INTO review_sessions(class_id, starts_at, ends_at, max_participants)
-            VALUES (:class_id, '2030-01-01 10:00Z', '2030-01-01 11:00Z', :max_participants)
-            RETURNING id;
-            '''
-        ),
-        {'class_id': class_id, 'max_participants': max_participants},
-    )
-
-
-async def assert_integrity_error(engine: AsyncEngine, statement: str, params: dict | None = None) -> None:
-    with raises(IntegrityError):
-        async with engine.begin() as conn:
-            await conn.execute(text(statement), params or {})
+from . import utils
 
 
 @mark.anyio
@@ -81,7 +31,13 @@ async def test_seed_admin_and_schema_objects_exist(db_engine):
             )
         )
         admin_role = await conn.scalar(
-            text("SELECT role_id FROM users WHERE mail = 'admin@admin.com';")
+            text(
+                '''
+                SELECT role_id
+                FROM users
+                WHERE mail = 'admin@admin.com';
+                '''
+            )
         )
 
     assert {
@@ -102,7 +58,7 @@ async def test_seed_admin_and_schema_objects_exist(db_engine):
 @mark.anyio
 async def test_auth_sessions_enforce_user_fk_uuid_default_and_revocation(db_engine):
     async with db_engine.begin() as conn:
-        user_id = await insert_user(conn, 'schema-auth-session@example.com')
+        user = await utils.insert_user(conn, mail='schema-auth-session@example.com')
         row = (
             await conn.execute(
                 text(
@@ -112,7 +68,7 @@ async def test_auth_sessions_enforce_user_fk_uuid_default_and_revocation(db_engi
                     RETURNING id, revoked_at;
                     '''
                 ),
-                {'user_id': user_id},
+                {'user_id': user['id']},
             )
         ).one()
 
@@ -133,14 +89,14 @@ async def test_auth_sessions_enforce_user_fk_uuid_default_and_revocation(db_engi
 
     assert revoked_at is not None
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO auth_sessions(user_id) VALUES (99999999);',
     )
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO auth_sessions(id, user_id) VALUES (:session_id, :user_id);',
-        {'session_id': row.id, 'user_id': user_id},
+        {'session_id': row.id, 'user_id': user['id']},
     )
 
 
@@ -159,14 +115,14 @@ async def test_user_role_defaults_check_and_unique_mail(db_engine):
 
     assert role_id == 1
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         '''
         INSERT INTO users(mail, name, hashed_password, role_id)
         VALUES ('schema-invalid-role@example.com', 'Invalid Role', 'hash', 9);
         ''',
     )
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         '''
         INSERT INTO users(mail, name, hashed_password)
@@ -178,55 +134,60 @@ async def test_user_role_defaults_check_and_unique_mail(db_engine):
 @mark.anyio
 async def test_class_professors_require_professor_users(db_engine):
     async with db_engine.begin() as conn:
-        class_id = await insert_class(conn, 'schema-professors-class')
-        professor_id = await insert_user(conn, 'schema-professor@example.com', role_id=2)
-        student_id = await insert_user(conn, 'schema-not-professor@example.com', role_id=1)
+        klass = await utils.insert_class(conn, title='schema-professors-class')
+        professor = await utils.insert_user(conn, role_id=2, mail='schema-professor@example.com')
+        student = await utils.insert_user(conn, role_id=1, mail='schema-not-professor@example.com')
 
         await conn.execute(
-            text('INSERT INTO class_professors(id, class_id) VALUES (:id, :class_id);'),
-            {'id': professor_id, 'class_id': class_id},
+            text(
+                '''
+                INSERT INTO class_professors(id, class_id)
+                VALUES (:id, :class_id);
+                '''
+            ),
+            {'id': professor['id'], 'class_id': klass['id']},
         )
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO class_professors(id, class_id) VALUES (:id, :class_id);',
-        {'id': student_id, 'class_id': class_id},
+        {'id': student['id'], 'class_id': klass['id']},
     )
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO class_professors(id, class_id) VALUES (:id, :class_id);',
-        {'id': professor_id, 'class_id': class_id},
+        {'id': professor['id'], 'class_id': klass['id']},
     )
 
 
 @mark.anyio
 async def test_class_assistants_require_student_users(db_engine):
     async with db_engine.begin() as conn:
-        class_id = await insert_class(conn, 'schema-assistants-class')
-        student_id = await insert_user(conn, 'schema-assistant@example.com', role_id=1)
-        professor_id = await insert_user(conn, 'schema-not-assistant@example.com', role_id=2)
+        klass = await utils.insert_class(conn, title='schema-assistants-class')
+        student = await utils.insert_user(conn, role_id=1, mail='schema-assistant@example.com')
+        professor = await utils.insert_user(conn, role_id=2, mail='schema-not-assistant@example.com')
 
         await conn.execute(
             text('INSERT INTO class_assistants(id, class_id) VALUES (:id, :class_id);'),
-            {'id': student_id, 'class_id': class_id},
+            {'id': student['id'], 'class_id': klass['id']},
         )
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO class_assistants(id, class_id) VALUES (:id, :class_id);',
-        {'id': professor_id, 'class_id': class_id},
+        {'id': professor['id'], 'class_id': klass['id']},
     )
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO class_assistants(id, class_id) VALUES (:id, :class_id);',
-        {'id': student_id, 'class_id': class_id},
+        {'id': student['id'], 'class_id': klass['id']},
     )
 
 
 @mark.anyio
 async def test_review_sessions_enforce_foreign_key_checks_and_defaults(db_engine):
     async with db_engine.begin() as conn:
-        class_id = await insert_class(conn, 'schema-review-session-class')
+        klass = await utils.insert_class(conn, title='schema-review-session-class')
         row = (
             await conn.execute(
                 text(
@@ -236,48 +197,48 @@ async def test_review_sessions_enforce_foreign_key_checks_and_defaults(db_engine
                     RETURNING location, max_participants;
                     '''
                 ),
-                {'class_id': class_id},
+                {'class_id': klass['id']},
             )
         ).one()
 
     assert row == ('online', 5)
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         '''
         INSERT INTO review_sessions(class_id, starts_at, ends_at)
         VALUES (99999999, '2030-01-01 10:00Z', '2030-01-01 11:00Z');
         ''',
     )
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         '''
         INSERT INTO review_sessions(class_id, starts_at, ends_at)
         VALUES (:class_id, '2030-01-01 10:00Z', '2030-01-01 10:00Z');
         ''',
-        {'class_id': class_id},
+        {'class_id': klass['id']},
     )
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         '''
         INSERT INTO review_sessions(class_id, starts_at, ends_at, max_participants)
         VALUES (:class_id, '2030-01-01 10:00Z', '2030-01-01 11:00Z', 0);
         ''',
-        {'class_id': class_id},
+        {'class_id': klass['id']},
     )
 
 
 @mark.anyio
 async def test_session_assistants_must_assist_same_class_as_session(db_engine):
     async with db_engine.begin() as conn:
-        assistant_id = await insert_user(conn, 'schema-session-assistant@example.com', role_id=1)
-        class_a = await insert_class(conn, 'schema-session-assistant-class-a')
-        class_b = await insert_class(conn, 'schema-session-assistant-class-b')
-        session_a = await insert_review_session(conn, class_a)
+        assistant = await utils.insert_user(conn, role_id=1, mail='schema-session-assistant@example.com')
+        class_a = await utils.insert_class(conn, title='schema-session-assistant-class-a')
+        class_b = await utils.insert_class(conn, title='schema-session-assistant-class-b')
+        session_a = await utils.insert_review_session(conn, class_a['id'])
 
         await conn.execute(
             text('INSERT INTO class_assistants(id, class_id) VALUES (:id, :class_id);'),
-            {'id': assistant_id, 'class_id': class_a},
+            {'id': assistant['id'], 'class_id': class_a['id']},
         )
         await conn.execute(
             text(
@@ -286,26 +247,26 @@ async def test_session_assistants_must_assist_same_class_as_session(db_engine):
                 VALUES (:id, :class_id, :session_id);
                 '''
             ),
-            {'id': assistant_id, 'class_id': class_a, 'session_id': session_a},
+            {'id': assistant['id'], 'class_id': class_a['id'], 'session_id': session_a},
         )
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         '''
         INSERT INTO session_assistants(id, class_id, session_id)
         VALUES (:id, :class_id, :session_id);
         ''',
-        {'id': assistant_id, 'class_id': class_b, 'session_id': session_a},
+        {'id': assistant['id'], 'class_id': class_b['id'], 'session_id': session_a},
     )
 
 
 @mark.anyio
 async def test_session_applicants_require_student_users_and_unique_application(db_engine):
     async with db_engine.begin() as conn:
-        class_id = await insert_class(conn, 'schema-applicants-class')
-        session_id = await insert_review_session(conn, class_id)
-        student_id = await insert_user(conn, 'schema-applicant@example.com', role_id=1)
-        professor_id = await insert_user(conn, 'schema-not-applicant@example.com', role_id=2)
+        klass = await utils.insert_class(conn, title='schema-applicants-class')
+        session_id = await utils.insert_review_session(conn, klass['id'])
+        student = await utils.insert_user(conn, role_id=1, mail='schema-applicant@example.com')
+        professor = await utils.insert_user(conn, role_id=2, mail='schema-not-applicant@example.com')
 
         applied_at = await conn.scalar(
             text(
@@ -315,34 +276,34 @@ async def test_session_applicants_require_student_users_and_unique_application(d
                 RETURNING applied_at;
                 '''
             ),
-            {'id': student_id, 'session_id': session_id},
+            {'id': student['id'], 'session_id': session_id},
         )
 
     assert applied_at is not None
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO session_applicants(id, session_id) VALUES (:id, :session_id);',
-        {'id': professor_id, 'session_id': session_id},
+        {'id': professor['id'], 'session_id': session_id},
     )
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO session_applicants(id, session_id) VALUES (:id, :session_id);',
-        {'id': student_id, 'session_id': session_id},
+        {'id': student['id'], 'session_id': session_id},
     )
 
 
 @mark.anyio
 async def test_session_participants_require_application_and_default_attendance(db_engine):
     async with db_engine.begin() as conn:
-        class_id = await insert_class(conn, 'schema-participants-class')
-        session_id = await insert_review_session(conn, class_id)
-        applicant_id = await insert_user(conn, 'schema-participant@example.com', role_id=1)
-        non_applicant_id = await insert_user(conn, 'schema-non-participant@example.com', role_id=1)
+        klass = await utils.insert_class(conn, title='schema-participants-class')
+        session_id = await utils.insert_review_session(conn, klass['id'])
+        applicant = await utils.insert_user(conn, role_id=1, mail='schema-participant@example.com')
+        non_applicant = await utils.insert_user(conn, role_id=1, mail='schema-non-participant@example.com')
 
         await conn.execute(
             text('INSERT INTO session_applicants(id, session_id) VALUES (:id, :session_id);'),
-            {'id': applicant_id, 'session_id': session_id},
+            {'id': applicant['id'], 'session_id': session_id},
         )
         row = (
             await conn.execute(
@@ -353,28 +314,28 @@ async def test_session_participants_require_application_and_default_attendance(d
                     RETURNING confirmed_at, attended;
                     '''
                 ),
-                {'id': applicant_id, 'session_id': session_id},
+                {'id': applicant['id'], 'session_id': session_id},
             )
         ).one()
 
     assert row.confirmed_at is not None
     assert row.attended is False
 
-    await assert_integrity_error(
+    await utils.assert_integrity_error(
         db_engine,
         'INSERT INTO session_participants(id, session_id) VALUES (:id, :session_id);',
-        {'id': non_applicant_id, 'session_id': session_id},
+        {'id': non_applicant['id'], 'session_id': session_id},
     )
 
 
 @mark.anyio
 async def test_session_applicants_status_orders_confirmed_and_waitlisted(db_engine):
     async with db_engine.begin() as conn:
-        class_id = await insert_class(conn, 'schema-status-class')
-        session_id = await insert_review_session(conn, class_id, max_participants=2)
-        first_id = await insert_user(conn, 'schema-status-first@example.com', role_id=1)
-        second_id = await insert_user(conn, 'schema-status-second@example.com', role_id=1)
-        third_id = await insert_user(conn, 'schema-status-third@example.com', role_id=1)
+        klass = await utils.insert_class(conn, title='schema-status-class')
+        session_id = await utils.insert_review_session(conn, klass['id'], max_participants=2)
+        first = await utils.insert_user(conn, role_id=1, mail='schema-status-first@example.com')
+        second = await utils.insert_user(conn, role_id=1, mail='schema-status-second@example.com')
+        third = await utils.insert_user(conn, role_id=1, mail='schema-status-third@example.com')
 
         await conn.execute(
             text(
@@ -387,9 +348,9 @@ async def test_session_applicants_status_orders_confirmed_and_waitlisted(db_engi
                 '''
             ),
             {
-                'first_id': first_id,
-                'second_id': second_id,
-                'third_id': third_id,
+                'first_id': first['id'],
+                'second_id': second['id'],
+                'third_id': third['id'],
                 'session_id': session_id,
             },
         )
@@ -408,7 +369,7 @@ async def test_session_applicants_status_orders_confirmed_and_waitlisted(db_engi
         ).all()
 
     assert rows == [
-        (first_id, 1, True, None),
-        (second_id, 2, True, None),
-        (third_id, 3, False, 1),
+        (first['id'], 1, True, None),
+        (second['id'], 2, True, None),
+        (third['id'], 3, False, 1),
     ]

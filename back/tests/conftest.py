@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from testcontainers.postgres import PostgresContainer
 
 from back import app, Settings
+from . import utils
 
 
 @fixture(scope='session', autouse=True)
@@ -34,6 +35,64 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
     yield engine
 
     await engine.dispose()
+
+
+@fixture
+async def admin_user(db_engine: AsyncEngine) -> dict[str, int | str]:
+    async with db_engine.begin() as conn:
+        row = (await conn.execute(
+            text(
+                '''
+                SELECT id, mail, name
+                FROM users
+                WHERE mail = 'admin@admin.com';
+                '''
+            )
+        )).mappings().one()
+
+    return dict(row)
+
+
+@fixture
+async def student_user(db_engine: AsyncEngine) -> dict[str, int | str]:
+    async with db_engine.begin() as conn:
+        return await utils.insert_user(conn, role_id=1)
+
+
+@fixture
+async def assistant_user(db_engine: AsyncEngine) -> dict[str, int | str | dict[str, int | str]]:
+    async with db_engine.begin() as conn:
+        user = await utils.insert_user(conn, role_id=1)
+        klass = await utils.insert_class(conn)
+        await conn.execute(
+            text(
+                '''
+                INSERT INTO class_assistants(id, class_id)
+                VALUES (:user_id, :class_id);
+                '''
+            ),
+            {'user_id': user['id'], 'class_id': klass['id']},
+        )
+
+    return {**user, 'class': klass}
+
+
+@fixture
+async def professor_user(db_engine: AsyncEngine) -> dict[str, int | str | dict[str, int | str]]:
+    async with db_engine.begin() as conn:
+        user = await utils.insert_user(conn, role_id=2)
+        klass = await utils.insert_class(conn)
+        await conn.execute(
+            text(
+                '''
+                INSERT INTO class_professors(id, class_id)
+                VALUES (:user_id, :class_id);
+                '''
+            ),
+            {'user_id': user['id'], 'class_id': klass['id']},
+        )
+
+    return {**user, 'class': klass}
 
 
 @fixture(scope='session')
