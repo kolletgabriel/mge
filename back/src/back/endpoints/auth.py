@@ -1,13 +1,12 @@
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import text
 
+from back import db
 from back.dependencies import ConnDep, HashToolDep, RawSessionDep
-from back.models import Credentials, SessionData
+from back.models import Credentials
 
 
 router = APIRouter()
@@ -22,15 +21,7 @@ async def login(
 ) -> None:
     sess.clear()  # garante sessão nova
 
-    result = (await conn.execute(
-        text(
-            '''
-            SELECT id, hashed_password, role_id
-            FROM users
-            WHERE mail = :mail;
-            '''
-        ).bindparams(mail=creds.mail)
-    )).first()
+    result = await db.get_login_user(conn, creds.mail)
 
     hasher, dummy_hash = hash_tool
     try:
@@ -46,14 +37,7 @@ async def login(
         raise HTTPException(status_code=401)
 
     session_id = uuid4()
-    await conn.execute(
-        text(
-            '''
-            INSERT INTO auth_sessions(id, user_id)
-            VALUES (:sid, :uid);
-            '''
-        ).bindparams(sid=session_id, uid=user_id)
-    )
+    await db.create_auth_session(conn, session_id, user_id)
 
     sess.update(
         uid = user_id,
@@ -67,15 +51,6 @@ async def logout(sess: RawSessionDep, conn: ConnDep) -> None:
     if not (sess.get('sid') and sess.get('uid')):
         return
 
-    ts = datetime.now(timezone.utc)
-    await conn.execute(
-        text(
-            '''
-            UPDATE auth_sessions
-            SET revoked_at = :ts
-            WHERE id = CAST(:sid AS UUID) AND user_id = :uid;
-            '''
-        ).bindparams(ts=ts, sid=sess['sid'], uid=sess['uid'])
-    )
+    await db.revoke_auth_session(conn, sess['sid'], sess['uid'])
 
     sess.clear()

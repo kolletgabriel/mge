@@ -3,9 +3,9 @@ from typing import Any, Annotated, AsyncIterator
 from argon2 import PasswordHasher
 from fastapi import Depends, Request, HTTPException
 from pydantic import ValidationError
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from back import db
 from back.models import SessionData
 
 
@@ -34,19 +34,7 @@ async def _require_session(sess: RawSessionDep, conn: ConnDep) -> SessionData:
     except ValidationError:
         raise HTTPException(status_code=401)
 
-    result = (await conn.execute(
-        text(
-            '''
-            SELECT 1
-            FROM auth_sessions
-            WHERE id = CAST(:sid AS UUID)
-                AND user_id = :uid
-                AND revoked_at IS NULL;
-            '''
-        ).bindparams(sid=sess_data.sid, uid=sess_data.uid)
-    )).scalar()
-
-    if result is None:
+    if not await db.auth_session_is_active(conn, sess_data.sid, sess_data.uid):
         raise HTTPException(status_code=401)
 
     return sess_data
