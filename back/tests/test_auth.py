@@ -1,4 +1,71 @@
+from uuid import uuid4
+
 from pytest import mark
+
+
+def test_register_user_success(test_client):
+    mail = f'{uuid4()}@example.com'
+    registration = {
+        'mail': f' {mail} ',
+        'name': ' New Student ',
+        'password': 'password123',
+    }
+    res = test_client.post('/register', json=registration)
+
+    assert res.status_code == 201
+    assert res.cookies.get('session')
+    assert res.json() == {
+        'id': res.json()['id'],
+        'mail': mail,
+        'name': 'New Student',
+        'role': 'student',
+        'rid': 1,
+        'scope': {'assistant_for': []},
+    }
+
+    test_client.cookies.clear()
+
+
+def test_register_user_failure_duplicate_mail(test_client):
+    test_client.cookies.clear()
+    registration = {
+        'mail': f'{uuid4()}@example.com',
+        'name': 'New Student',
+        'password': 'password123',
+    }
+
+    res = test_client.post('/register', json=registration)
+    res2 = test_client.post('/register', json=registration)
+
+    assert res.status_code == 201
+    assert res2.status_code == 409
+    assert not test_client.cookies.get('session')
+
+
+def test_register_user_failure_invalid_mail(test_client):
+    test_client.cookies.clear()
+    registration = {
+        'mail': 'not-an-email',
+        'name': 'New Student',
+        'password': 'password123',
+    }
+    res = test_client.post('/register', json=registration)
+
+    assert res.status_code == 422
+    assert not test_client.cookies.get('session')
+
+
+def test_register_user_failure_short_password(test_client):
+    test_client.cookies.clear()
+    registration = {
+        'mail': f'{uuid4()}@example.com',
+        'name': 'New Student',
+        'password': 'short',
+    }
+    res = test_client.post('/register', json=registration)
+
+    assert res.status_code == 422
+    assert not test_client.cookies.get('session')
 
 
 def test_login_root_user_success(test_client):

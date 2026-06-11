@@ -47,6 +47,25 @@ async def create_auth_session(
     )
 
 
+async def create_user(
+    conn: AsyncConnection,
+    mail: str,
+    name: str,
+    hashed_password: str,
+) -> tuple[int, int]:
+    result = (await conn.execute(
+        text(
+            '''
+            INSERT INTO users(mail, name, hashed_password)
+            VALUES (:mail, :name, :hashed_password)
+            RETURNING id, role_id;
+            '''
+        ).bindparams(mail=mail, name=name, hashed_password=hashed_password)
+    )).one()
+
+    return (*result,)
+
+
 async def revoke_auth_session(
     conn: AsyncConnection,
     session_id: str,

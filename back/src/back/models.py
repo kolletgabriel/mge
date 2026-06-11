@@ -10,9 +10,28 @@ from pydantic import (
 )
 
 
+Email = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=3,
+        max_length=320,
+        pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+    ),
+]
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+Password = Annotated[SecretStr, Field(min_length=8, max_length=128)]
+
+
 class Credentials(BaseModel):
     mail: Annotated[str, StringConstraints(strip_whitespace=True)]
     password: SecretStr
+
+
+class Registration(BaseModel):
+    mail: Email
+    name: Name
+    password: Password
 
 
 class SessionData(BaseModel):
