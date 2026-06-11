@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from argon2.exceptions import VerifyMismatchError
@@ -59,3 +60,22 @@ async def login(
         rid = user_role,
         sid = str(session_id)
     )
+
+
+@router.post('/logout', status_code=204)
+async def logout(sess: RawSessionDep, conn: ConnDep) -> None:
+    if not (sess.get('sid') and sess.get('uid')):
+        return
+
+    ts = datetime.now(timezone.utc)
+    await conn.execute(
+        text(
+            '''
+            UPDATE auth_sessions
+            SET revoked_at = :ts
+            WHERE id = CAST(:sid AS UUID) AND user_id = :uid;
+            '''
+        ).bindparams(ts=ts, sid=sess['sid'], uid=sess['uid'])
+    )
+
+    sess.clear()

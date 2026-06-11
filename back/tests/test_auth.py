@@ -45,3 +45,33 @@ async def test_auth_failure_bad_cookie(authed_test_client):
 
     assert res.status_code == 401
 
+
+@mark.anyio
+async def test_logout_deletes_session_cookie(authed_test_client):
+    res = authed_test_client.post('/logout')
+
+    assert res.status_code == 204
+    assert 'session=' in res.headers['set-cookie']
+    assert 'expires=Thu, 01 Jan 1970 00:00:00 GMT' in res.headers['set-cookie']
+
+
+@mark.anyio
+async def test_logout_prevents_access(authed_test_client):
+    res = authed_test_client.post('/logout')
+    res2 = authed_test_client.get('/')
+
+    assert res.status_code == 204
+    assert res2.status_code == 401
+
+
+def test_logout_status_code_no_session(test_client):
+    res = test_client.post('/logout')
+
+    assert res.status_code == 204
+
+
+@mark.anyio
+async def test_logout_status_code_with_session(authed_test_client):
+    res = authed_test_client.post('/logout')
+
+    assert res.status_code == 204
