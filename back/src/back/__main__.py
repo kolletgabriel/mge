@@ -1,9 +1,6 @@
-import os
+from os import environ
 
 import uvicorn
 
 
-uvicorn.run('back:app',
-    uds = os.environ['UVICORN_UDS'],
-    forwarded_allow_ips = os.environ['UVICORN_UDS']
-)
+uvicorn.run('back:app', uds=environ['UVICORN_UDS'], forwarded_allow_ips='*')
