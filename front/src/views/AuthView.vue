@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { login, register } from '@/auth'
+import PasswordToggle from '@/components/PasswordToggle.vue'
 
 const router = useRouter()
 
@@ -10,6 +11,7 @@ const loginMail = ref('')
 const loginPassword = ref('')
 const loginError = ref('')
 const loginLoading = ref(false)
+const showLoginPassword = ref(false)
 
 const registerName = ref('')
 const registerMail = ref('')
@@ -17,6 +19,8 @@ const registerPassword = ref('')
 const registerPasswordConfirmation = ref('')
 const registerError = ref('')
 const registerLoading = ref(false)
+const showRegisterPassword = ref(false)
+const showRegisterPasswordConfirmation = ref(false)
 
 type RegistrationErrors = {
   name?: string
@@ -122,13 +126,19 @@ async function submitRegistration(): Promise<void> {
         </label>
         <label>
           Senha
-          <input
-            v-model="loginPassword"
-            autocomplete="current-password"
-            name="login-password"
-            required
-            type="password"
-          >
+          <span class="password-control">
+            <input
+              v-model="loginPassword"
+              autocomplete="current-password"
+              name="login-password"
+              required
+              :type="showLoginPassword ? 'text' : 'password'"
+            >
+            <PasswordToggle
+              :shown="showLoginPassword"
+              @toggle="showLoginPassword = !showLoginPassword"
+            />
+          </span>
         </label>
         <p v-if="loginError" class="message" role="alert">{{ loginError }}</p>
         <button type="submit" :disabled="loginLoading">
@@ -169,30 +179,42 @@ async function submitRegistration(): Promise<void> {
             Senha
             <small>Mínimo de 8 caracteres</small>
           </span>
-          <input
-            v-model="registerPassword"
-            autocomplete="new-password"
-            maxlength="128"
-            minlength="8"
-            name="register-password"
-            required
-            type="password"
-            :aria-invalid="Boolean(registerErrors.password)"
-          >
+          <span class="password-control">
+            <input
+              v-model="registerPassword"
+              autocomplete="new-password"
+              maxlength="128"
+              minlength="8"
+              name="register-password"
+              required
+              :type="showRegisterPassword ? 'text' : 'password'"
+              :aria-invalid="Boolean(registerErrors.password)"
+            >
+            <PasswordToggle
+              :shown="showRegisterPassword"
+              @toggle="showRegisterPassword = !showRegisterPassword"
+            />
+          </span>
           <span v-if="registerErrors.password" class="field-error">{{ registerErrors.password }}</span>
         </label>
         <label>
           Confirmar senha
-          <input
-            v-model="registerPasswordConfirmation"
-            autocomplete="new-password"
-            maxlength="128"
-            minlength="8"
-            name="register-password-confirmation"
-            required
-            type="password"
-            :aria-invalid="Boolean(registerErrors.passwordConfirmation)"
-          >
+          <span class="password-control">
+            <input
+              v-model="registerPasswordConfirmation"
+              autocomplete="new-password"
+              maxlength="128"
+              minlength="8"
+              name="register-password-confirmation"
+              required
+              :type="showRegisterPasswordConfirmation ? 'text' : 'password'"
+              :aria-invalid="Boolean(registerErrors.passwordConfirmation)"
+            >
+            <PasswordToggle
+              :shown="showRegisterPasswordConfirmation"
+              @toggle="showRegisterPasswordConfirmation = !showRegisterPasswordConfirmation"
+            />
+          </span>
           <span v-if="registerErrors.passwordConfirmation" class="field-error">
             {{ registerErrors.passwordConfirmation }}
           </span>
@@ -271,6 +293,7 @@ input {
   border: 1px solid #b7c0cf;
   font: inherit;
   padding: 0.75rem;
+  width: 100%;
 }
 
 input:focus {
@@ -298,6 +321,22 @@ input[aria-invalid="true"] {
   color: #8b1e1e;
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.password-control {
+  display: block;
+  position: relative;
+}
+
+.password-control input {
+  padding-right: 2.8rem;
+}
+
+.password-control :deep(.password-toggle) {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 button {
