@@ -132,6 +132,57 @@ SELECT *
 FROM ranked;
 
 
+CREATE OR REPLACE VIEW current_users AS
+WITH professor_classes AS (
+    SELECT cp.id AS user_id
+        ,jsonb_agg(
+            jsonb_build_object(
+                'id', c.id,
+                'title', c.title
+            )
+            ORDER BY c.title, c.id
+        ) AS classes
+    FROM class_professors AS cp
+        JOIN classes AS c ON c.id = cp.class_id
+    GROUP BY cp.id
+), assistant_classes AS (
+    SELECT ca.id AS user_id
+        ,jsonb_agg(
+            jsonb_build_object(
+                'id', c.id,
+                'title', c.title
+            )
+            ORDER BY c.title, c.id
+        ) AS classes
+    FROM class_assistants AS ca
+        JOIN classes AS c ON c.id = ca.class_id
+    GROUP BY ca.id
+)
+SELECT u.id
+    ,u.mail
+    ,u.name
+    ,u.role_id
+    ,CASE u.role_id
+        WHEN 0 THEN 'admin'
+        WHEN 1 THEN 'student'
+        WHEN 2 THEN 'professor'
+    END AS role
+    ,CASE u.role_id
+        WHEN 0 THEN jsonb_build_object('global', true)
+        WHEN 1 THEN jsonb_build_object(
+            'assistant_for',
+            COALESCE(ac.classes, '[]'::jsonb)
+        )
+        WHEN 2 THEN jsonb_build_object(
+            'classes',
+            COALESCE(pc.classes, '[]'::jsonb)
+        )
+    END AS scope
+FROM users AS u
+    LEFT JOIN professor_classes AS pc ON pc.user_id = u.id
+    LEFT JOIN assistant_classes AS ac ON ac.user_id = u.id;
+
+
 -- Seeds:
 
 

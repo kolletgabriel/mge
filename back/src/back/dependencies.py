@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from back import db
-from back.models import SessionData
+from back.models import CurrentUser, SessionData
 
 
 async def _get_db(req: Request) -> AsyncIterator[AsyncConnection]:
@@ -41,3 +41,9 @@ async def _require_session(sess: RawSessionDep, conn: ConnDep) -> SessionData:
 
 CurrentSessionDep = Annotated[SessionData, Depends(_require_session)]
 SessionRequiredDep = Depends(_require_session)
+
+
+async def _current_user(sess: CurrentSessionDep, conn: ConnDep) -> CurrentUser:
+    return await db.get_current_user(conn, sess.uid)
+
+CurrentUserDep = Annotated[CurrentUser, Depends(_current_user)]

@@ -51,7 +51,10 @@ async def test_seed_admin_and_schema_objects_exist(db_engine):
         'session_applicants',
         'session_participants',
     } <= tables
-    assert 'session_applicants_status' in views
+    assert {
+        'current_users',
+        'session_applicants_status'
+    } <= views
     assert admin_role == 0
 
 

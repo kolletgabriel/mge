@@ -6,19 +6,19 @@ from fastapi.concurrency import run_in_threadpool
 
 from back import db
 from back.dependencies import ConnDep, HashToolDep, RawSessionDep
-from back.models import Credentials
+from back.models import Credentials, CurrentUser
 
 
 router = APIRouter()
 
 
-@router.post('/login', status_code=204)
+@router.post('/login')
 async def login(
     sess: RawSessionDep,
     conn: ConnDep,
     hash_tool: HashToolDep,
     creds: Credentials,
-) -> None:
+) -> CurrentUser:
     sess.clear()  # garante sessão nova
 
     result = await db.get_login_user(conn, creds.mail)
@@ -44,6 +44,8 @@ async def login(
         rid = user_role,
         sid = str(session_id)
     )
+
+    return await db.get_current_user(conn, user_id)
 
 
 @router.post('/logout', status_code=204)

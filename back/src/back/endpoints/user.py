@@ -1,12 +1,12 @@
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
-from back.dependencies import CurrentSessionDep, SessionRequiredDep
-
-
-router = APIRouter(dependencies=[SessionRequiredDep])
+from back.dependencies import CurrentUserDep
+from back.models import CurrentUser
 
 
-@router.get('/')
-async def user_data(sess: CurrentSessionDep) -> JSONResponse:
-    return JSONResponse(sess.model_dump(mode='json'))
+router = APIRouter()
+
+
+@router.get('/me')
+async def user_data(user: CurrentUserDep) -> CurrentUser:
+    return user

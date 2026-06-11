@@ -5,8 +5,16 @@ def test_login_root_user_success(test_client):
     creds = {'mail': 'admin@admin.com', 'password': 'admin'}
     res = test_client.post('/login', json=creds)
 
-    assert res.status_code == 204
+    assert res.status_code == 200
     assert res.cookies.get('session')
+    assert res.json() == {
+        'id': 1,
+        'mail': 'admin@admin.com',
+        'name': 'Administrador',
+        'role': 'admin',
+        'rid': 0,
+        'scope': {'global': True},
+    }
 
 
 def test_login_root_user_failure_wrong_pw(test_client):
@@ -27,13 +35,13 @@ def test_login_failure_nonexistent_user(test_client):
 
 @mark.anyio
 async def test_auth_success(authed_test_client):
-    res2 = authed_test_client.get('/')
+    res2 = authed_test_client.get('/me')
 
     assert res2.status_code == 200
 
 
 def test_auth_failure_no_cookie(test_client):
-    res = test_client.get('/')
+    res = test_client.get('/me')
 
     assert res.status_code == 401
 
@@ -41,7 +49,7 @@ def test_auth_failure_no_cookie(test_client):
 @mark.anyio
 async def test_auth_failure_bad_cookie(authed_test_client):
     authed_test_client.cookies['session'] = 'bad_session'
-    res = authed_test_client.get('/')
+    res = authed_test_client.get('/me')
 
     assert res.status_code == 401
 
@@ -58,7 +66,7 @@ async def test_logout_deletes_session_cookie(authed_test_client):
 @mark.anyio
 async def test_logout_prevents_access(authed_test_client):
     res = authed_test_client.post('/logout')
-    res2 = authed_test_client.get('/')
+    res2 = authed_test_client.get('/me')
 
     assert res.status_code == 204
     assert res2.status_code == 401

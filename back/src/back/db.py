@@ -1,14 +1,20 @@
 from datetime import datetime, timezone
-from typing import NamedTuple
 from uuid import UUID
 
+from fastapi import HTTPException
+from pydantic import TypeAdapter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from back.models import CurrentUser
+
+
+CurrentUserAdapter = TypeAdapter(CurrentUser)
+
 
 async def get_login_user(
-        conn: AsyncConnection,
-        mail: str
+    conn: AsyncConnection,
+    mail: str,
 ) -> tuple[int, str, int] | None:
     result = (await conn.execute(
         text(
@@ -77,3 +83,23 @@ async def auth_session_is_active(
     )).scalar()
 
     return result is not None
+
+
+async def get_current_user(conn: AsyncConnection, user_id: int) -> CurrentUser:
+    row = (await conn.execute(
+        text(
+            '''
+            SELECT id, mail, name, role_id, role, scope
+            FROM current_users
+            WHERE id = :uid;
+            '''
+        ).bindparams(uid=user_id)
+    )).mappings().one_or_none()
+
+    if row is None:
+        raise HTTPException(status_code=401)
+
+    data = dict(row)
+    data['rid'] = data.pop('role_id')
+
+    return CurrentUserAdapter.validate_python(data)
