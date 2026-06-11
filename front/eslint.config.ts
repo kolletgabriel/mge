@@ -17,4 +17,10 @@ export default tseslint.config(
       },
     },
   },
+  {
+    rules: {
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+    },
+  },
 )
