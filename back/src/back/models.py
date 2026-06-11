@@ -1,6 +1,7 @@
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     Field,
     PositiveInt,
@@ -18,6 +19,7 @@ Email = Annotated[
         max_length=320,
         pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
     ),
+    AfterValidator(lambda e: e.lower())
 ]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Password = Annotated[SecretStr, Field(min_length=8, max_length=128)]
