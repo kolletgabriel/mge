@@ -21,7 +21,14 @@ Email = Annotated[
     ),
     AfterValidator(lambda e: e.lower())
 ]
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+Name = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=100
+    )
+]
 Password = Annotated[SecretStr, Field(min_length=8, max_length=128)]
 
 
