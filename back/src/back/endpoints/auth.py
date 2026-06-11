@@ -27,11 +27,19 @@ async def login(
     try:
         if result is None:
             # Mantem tempo constante. Sempre lança a exception:
-            await run_in_threadpool(hasher.verify, dummy_hash, creds.password)
+            await run_in_threadpool(
+                hasher.verify,
+                dummy_hash,
+                creds.password.get_secret_value()
+            )
             raise VerifyMismatchError  # garante
 
         user_id, user_hpw, user_role = result
-        await run_in_threadpool(hasher.verify, user_hpw, creds.password)
+        await run_in_threadpool(
+            hasher.verify,
+            user_hpw,
+            creds.password.get_secret_value()
+        )
 
     except VerifyMismatchError:
         raise HTTPException(status_code=401)

@@ -1,11 +1,18 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, PositiveInt, UUID4
+from pydantic import (
+    BaseModel,
+    Field,
+    PositiveInt,
+    SecretStr,
+    StringConstraints,
+    UUID4
+)
 
 
 class Credentials(BaseModel):
-    mail: str
-    password: str
+    mail: Annotated[str, StringConstraints(strip_whitespace=True)]
+    password: SecretStr
 
 
 class SessionData(BaseModel):
