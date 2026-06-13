@@ -30,7 +30,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[State]:
     await engine.dispose()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(root_path='/api', lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(user.router)
 app.add_middleware(SessionMiddleware, secret_key=Settings.SESSION_SECRET, max_age=None)
