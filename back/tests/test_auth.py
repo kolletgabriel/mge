@@ -35,6 +35,7 @@ def test_register_user_failure_duplicate_mail(test_client):
     }
 
     res = test_client.post('/register', json=registration)
+    test_client.cookies.clear()
     res2 = test_client.post('/register', json=registration)
 
     assert res.status_code == 201

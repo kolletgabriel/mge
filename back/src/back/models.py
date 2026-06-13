@@ -7,6 +7,7 @@ from pydantic import (
     PositiveInt,
     SecretStr,
     StringConstraints,
+    TypeAdapter,
     UUID4
 )
 
@@ -94,3 +95,4 @@ CurrentUser = Annotated[
     AdminUser | StudentUser | ProfessorUser,
     Field(discriminator='role'),
 ]
+CurrentUserAdpt = TypeAdapter(CurrentUser)

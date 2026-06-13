@@ -1,9 +1,7 @@
 from os import getenv
-from typing import TypedDict, TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 from contextlib import asynccontextmanager
 
-from argon2 import PasswordHasher
-from argon2.profiles import CHEAPEST
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from starlette.middleware.sessions import SessionMiddleware
@@ -21,17 +19,13 @@ class Settings:
 
 class State(TypedDict):
     db: AsyncEngine
-    ph: PasswordHasher
-    dummy_hash: str
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[State]:
     engine = create_async_engine(Settings.DB_URL)
-    ph = PasswordHasher.from_parameters(CHEAPEST)
-    dummy_hash = ph.hash('dummypassword')
 
-    yield { 'db': engine, 'ph': ph, 'dummy_hash': dummy_hash }
+    yield {'db': engine}
 
     await engine.dispose()
 
