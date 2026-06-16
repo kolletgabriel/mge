@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
-import { currentUser, logout, roleTitle } from '@/auth'
+import { currentUser, logout } from '@/auth'
 
 const router = useRouter()
 const logoutError = ref('')
@@ -44,7 +44,7 @@ async function submitLogout(): Promise<void> {
         <div class="avatar" aria-hidden="true">{{ initials }}</div>
         <div>
           <strong>{{ currentUser.name }}</strong>
-          <span>{{ roleTitle(currentUser.role) }}</span>
+          <span>{{ currentUser.role_title }}</span>
         </div>
       </section>
 
@@ -57,7 +57,7 @@ async function submitLogout(): Promise<void> {
     <div class="main-area">
       <nav class="topbar" aria-label="Principal">
         <RouterLink to="/">Home</RouterLink>
-        <RouterLink v-if="currentUser.rid !== 1" to="/dashboards">Dashboards</RouterLink>
+        <RouterLink v-if="currentUser.role_id !== 1" to="/dashboards">Dashboards</RouterLink>
       </nav>
 
       <slot />

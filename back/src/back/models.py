@@ -1,15 +1,6 @@
 from typing import Annotated, Literal
 
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    Field,
-    PositiveInt,
-    SecretStr,
-    StringConstraints,
-    TypeAdapter,
-    UUID4
-)
+from pydantic import AfterValidator, BaseModel, Field, PositiveInt, SecretStr, StringConstraints, UUID4
 
 
 Email = Annotated[
@@ -66,33 +57,32 @@ class AdminScope(BaseModel):
 
 
 class AdminUser(CurrentUserBase):
-    role: Literal['admin']
-    rid: Literal[0]
+    role_id: Literal[0]
+    role_title: Literal['Administrador']
     scope: AdminScope
 
 
 class StudentScope(BaseModel):
-    assistant_for: list[ClassRef] = Field(default_factory=list)
+    assists: list[ClassRef] = Field(default_factory=list)
 
 
 class StudentUser(CurrentUserBase):
-    role: Literal['student']
-    rid: Literal[1]
+    role_id: Literal[1]
+    role_title: Literal['Aluno']
     scope: StudentScope
 
 
 class ProfessorScope(BaseModel):
-    classes: list[ClassRef] = Field(default_factory=list)
+    teaches: list[ClassRef] = Field(default_factory=list)
 
 
 class ProfessorUser(CurrentUserBase):
-    role: Literal['professor']
-    rid: Literal[2]
+    role_id: Literal[2]
+    role_title: Literal['Professor']
     scope: ProfessorScope
 
 
 CurrentUser = Annotated[
     AdminUser | StudentUser | ProfessorUser,
-    Field(discriminator='role'),
+    Field(discriminator='role_id'),
 ]
-CurrentUserAdpt = TypeAdapter(CurrentUser)

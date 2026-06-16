@@ -40,7 +40,7 @@ router.beforeEach(async (to) => {
     return { name: 'home' }
   }
 
-  if (to.meta.requiresDashboardAccess && user?.rid === 1) {
+  if (to.meta.requiresDashboardAccess && user?.role_id === 1) {
     return { name: 'home' }
   }
 

@@ -18,9 +18,9 @@ def test_register_user_success(test_client):
         'id': res.json()['id'],
         'mail': mail,
         'name': 'New Student',
-        'role': 'student',
-        'rid': 1,
-        'scope': {'assistant_for': []},
+        'role_id': 1,
+        'role_title': 'Aluno',
+        'scope': {'assists': []},
     }
 
     test_client.cookies.clear()
@@ -79,8 +79,8 @@ def test_login_root_user_success(test_client):
         'id': 1,
         'mail': 'admin@admin.com',
         'name': 'Administrador',
-        'role': 'admin',
-        'rid': 0,
+        'role_id': 0,
+        'role_title': 'Administrador',
         'scope': {'global': True},
     }
 
@@ -102,24 +102,57 @@ def test_login_failure_nonexistent_user(test_client):
 
 
 @mark.anyio
-async def test_auth_success(authed_test_client):
-    res2 = authed_test_client.get('/me')
+async def test_auth_failure_absent_cookie(test_client):
+    res = test_client.get('/me')
 
-    assert res2.status_code == 200
+    assert res.status_code == 401
 
 
-def test_auth_failure_no_cookie(test_client):
+def test_auth_failure_unsigned_cookie(test_client):
+    test_client.cookies['session'] = 'bad_session'
     res = test_client.get('/me')
 
     assert res.status_code == 401
 
 
 @mark.anyio
-async def test_auth_failure_bad_cookie(authed_test_client):
-    authed_test_client.cookies['session'] = 'bad_session'
-    res = authed_test_client.get('/me')
+async def test_auth_failure_signed_malformed_cookie(
+    test_client,
+    signed_malformed_session_token,
+):
+    test_client.cookies['session'] = signed_malformed_session_token
+    res = test_client.get('/me')
 
     assert res.status_code == 401
+
+
+def test_auth_failure_valid_cookie_without_session_row(
+    test_client,
+    signed_session_token,
+):
+    test_client.cookies['session'] = signed_session_token
+    res = test_client.get('/me')
+
+    assert res.status_code == 401
+
+
+@mark.anyio
+@mark.usefixtures('revoked_auth_session')
+async def test_auth_failure_revoked_session_row(
+    test_client,
+    signed_session_token,
+):
+    test_client.cookies['session'] = signed_session_token
+    res = test_client.get('/me')
+
+    assert res.status_code == 401
+
+
+@mark.anyio
+async def test_auth_success_valid_cookie_and_session_row(authed_test_client):
+    res = authed_test_client.get('/me')
+
+    assert res.status_code == 200
 
 
 @mark.anyio

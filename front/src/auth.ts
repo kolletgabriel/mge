@@ -1,7 +1,5 @@
 import { readonly, ref } from 'vue'
 
-type RoleName = 'admin' | 'student' | 'professor'
-
 type ClassRef = {
   id: number
   title: string
@@ -11,8 +9,8 @@ type AdminUser = {
   id: number
   mail: string
   name: string
-  role: 'admin'
-  rid: 0
+  role_id: 0
+  role_title: 'Administrador'
   scope: { global: boolean }
 }
 
@@ -20,18 +18,18 @@ type StudentUser = {
   id: number
   mail: string
   name: string
-  role: 'student'
-  rid: 1
-  scope: { assistant_for: ClassRef[] }
+  role_id: 1
+  role_title: 'Aluno'
+  scope: { assists: ClassRef[] }
 }
 
 type ProfessorUser = {
   id: number
   mail: string
   name: string
-  role: 'professor'
-  rid: 2
-  scope: { classes: ClassRef[] }
+  role_id: 2
+  role_title: 'Professor'
+  scope: { teaches: ClassRef[] }
 }
 
 export type CurrentUser = AdminUser | StudentUser | ProfessorUser
@@ -130,14 +128,6 @@ export async function logout(): Promise<void> {
 
   user.value = null
   initialized.value = true
-}
-
-export function roleTitle(role: RoleName): string {
-  return {
-    admin: 'Administrador',
-    student: 'Aluno',
-    professor: 'Professor',
-  }[role]
 }
 
 export const currentUser = readonly(user)

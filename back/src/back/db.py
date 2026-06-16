@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Literal, TYPE_CHECKING
+from typing import Any, Literal, Mapping, TYPE_CHECKING
 from uuid import uuid4, UUID
 
 from sqlalchemy import text
@@ -14,15 +14,15 @@ async def create_user(
     mail: str,
     name: str,
     hashed_password: str,
-    role_id: Literal[0, 1, 2] = 1
-) -> tuple[int, int] | None:
+    role_id: Literal[0, 1, 2]
+) -> int | None:
     try:
-        result = (await conn.execute(
+        return (await conn.execute(
             text(
                 '''
                 INSERT INTO users(mail, name, hashed_password, role_id)
                 VALUES (:mail, :name, :hashed_password, :role_id)
-                RETURNING id, role_id;
+                RETURNING id;
                 '''
             ).bindparams(
                 mail = mail,
@@ -30,41 +30,31 @@ async def create_user(
                 hashed_password = hashed_password,
                 role_id = role_id
             )
-        )).one()
+        )).scalar_one()
     except IntegrityError:
         return
-
-    return (*result,)
 
 
 async def get_current_user(
     conn: AsyncConnection,
     user_id: int
-) -> dict[str, Any] | None:
-    row = (await conn.execute(
+) -> Mapping:
+    return (await conn.execute(
         text(
             '''
-            SELECT id, mail, name, role_id, role, scope
+            SELECT *
             FROM current_users
             WHERE id = :uid;
             '''
         ).bindparams(uid=user_id)
-    )).mappings().first()
-
-    if row is None:
-        return
-
-    result = dict(row)
-    result['rid'] = result.pop('role_id')
-
-    return result
+    )).mappings().one()
 
 
 async def get_login_user(
     conn: AsyncConnection,
     mail: str,
-) -> tuple[int, str, int] | None:
-    result = (await conn.execute(
+) -> Mapping | None:
+    return (await conn.execute(
         text(
             '''
             SELECT id, hashed_password, role_id
@@ -72,12 +62,7 @@ async def get_login_user(
             WHERE mail = :mail;
             '''
         ).bindparams(mail=mail)
-    )).first()
-
-    if result is None:
-        return
-
-    return (*result,)
+    )).mappings().first()
 
 
 async def create_auth_session(
