@@ -80,7 +80,11 @@ async function submitLogout(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  height: 100vh;
+  overflow: auto;
   padding: 1.25rem;
+  position: sticky;
+  top: 0;
 }
 
 .user-card {
@@ -172,6 +176,8 @@ async function submitLogout(): Promise<void> {
 
   .sidebar {
     gap: 0.75rem;
+    height: auto;
+    position: static;
   }
 
   .logout {
