@@ -14,5 +14,6 @@ declare module 'vue-router' {
     requiresAuth?: boolean
     guestOnly?: boolean
     requiresDashboardAccess?: boolean
+    requiresAdmin?: boolean
   }
 }
