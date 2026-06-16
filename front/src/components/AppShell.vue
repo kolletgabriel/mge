@@ -58,6 +58,8 @@ async function submitLogout(): Promise<void> {
       <nav class="topbar" aria-label="Principal">
         <RouterLink to="/">Home</RouterLink>
         <RouterLink v-if="currentUser.role_id !== 1" to="/dashboards">Dashboards</RouterLink>
+        <RouterLink v-if="currentUser.role_id === 0" to="/professores">Professores</RouterLink>
+        <RouterLink v-if="currentUser.role_id === 0" to="/disciplinas">Disciplinas</RouterLink>
       </nav>
 
       <slot />
