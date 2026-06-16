@@ -150,6 +150,32 @@ async def get_created_professor(
     )).mappings().one()
 
 
+async def list_classes(conn: AsyncConnection) -> list[Mapping]:
+    return list((await conn.execute(
+        text(
+            '''
+            SELECT id, title
+            FROM classes
+            ORDER BY title, id;
+            '''
+        )
+    )).mappings().all())
+
+
+async def list_professors(conn: AsyncConnection) -> list[Mapping]:
+    return list((await conn.execute(
+        text(
+            '''
+            SELECT u.id, u.mail, u.name, u.role_id, r.title AS role_title
+            FROM users AS u
+                JOIN roles AS r ON r.id = u.role_id
+            WHERE u.role_id = 2
+            ORDER BY u.name, u.id;
+            '''
+        )
+    )).mappings().all())
+
+
 async def get_current_user(
     conn: AsyncConnection,
     user_id: int

@@ -21,10 +21,12 @@ async def test_non_admin_users_cannot_access_admin_endpoints(
         '/classes',
         json=class_payload(f'admin-denied-class-{uuid4()}'),
     )
+    res_list_classes = non_admin_test_client.get('/classes')
     res_professor = non_admin_test_client.post(
         '/professors',
         json=professor_payload(f'{uuid4()}@example.com'),
     )
+    res_list_professors = non_admin_test_client.get('/professors')
     res_class_professor = non_admin_test_client.post(
         f'/classes/{committed_class["id"]}/professors',
         json={'professor_id': 1},
@@ -35,9 +37,69 @@ async def test_non_admin_users_cannot_access_admin_endpoints(
     )
 
     assert res_class.status_code == 403
+    assert res_list_classes.status_code == 403
     assert res_professor.status_code == 403
+    assert res_list_professors.status_code == 403
     assert res_class_professor.status_code == 403
     assert res_class_assistant.status_code == 403
+
+
+@mark.anyio
+async def test_admin_lists_classes_with_professors(
+    authed_test_client,
+    db_engine,
+    committed_class,
+    committed_professor,
+):
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                '''
+                INSERT INTO class_professors(id, class_id)
+                VALUES (:professor_id, :class_id);
+                '''
+            ),
+            {
+                'professor_id': committed_professor['id'],
+                'class_id': committed_class['id'],
+            },
+        )
+
+    res = authed_test_client.get('/classes')
+
+    assert res.status_code == 200
+    class_ = next(item for item in res.json() if item['id'] == committed_class['id'])
+    assert class_['title'] == committed_class['title']
+    assert class_['professors'][0]['id'] == committed_professor['id']
+
+
+@mark.anyio
+async def test_admin_lists_professors_with_classes(
+    authed_test_client,
+    db_engine,
+    committed_class,
+    committed_professor,
+):
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                '''
+                INSERT INTO class_professors(id, class_id)
+                VALUES (:professor_id, :class_id);
+                '''
+            ),
+            {
+                'professor_id': committed_professor['id'],
+                'class_id': committed_class['id'],
+            },
+        )
+
+    res = authed_test_client.get('/professors')
+
+    assert res.status_code == 200
+    professor = next(item for item in res.json() if item['id'] == committed_professor['id'])
+    assert professor['role_id'] == 2
+    assert professor['classes'][0]['id'] == committed_class['id']
 
 
 @mark.anyio
