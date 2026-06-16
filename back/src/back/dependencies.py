@@ -34,3 +34,10 @@ async def _require_session(sess: RawSessionDep, conn: ConnDep) -> SessionData:
 
 CurrentSessionDep = Annotated[SessionData, Depends(_require_session)]
 SessionRequiredDep = Depends(_require_session)
+
+
+async def _require_admin(sess: CurrentSessionDep) -> None:
+    if sess.rid != 0:
+        raise HTTPException(status_code=403)
+
+AdminRequiredDep = Depends(_require_admin)

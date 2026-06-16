@@ -35,6 +35,121 @@ async def create_user(
         return
 
 
+async def create_class(conn: AsyncConnection, title: str) -> Mapping | None:
+    try:
+        return (await conn.execute(
+            text(
+                '''
+                INSERT INTO classes(title)
+                VALUES (:title)
+                RETURNING id, title;
+                '''
+            ).bindparams(title=title)
+        )).mappings().one()
+    except IntegrityError:
+        return
+
+
+async def associate_professor_to_class(
+    conn: AsyncConnection,
+    professor_id: int,
+    class_id: int,
+) -> Mapping | None:
+    try:
+        return (await conn.execute(
+            text(
+                '''
+                INSERT INTO class_professors(id, class_id)
+                VALUES (:professor_id, :class_id)
+                RETURNING id, class_id;
+                '''
+            ).bindparams(professor_id=professor_id, class_id=class_id)
+        )).mappings().one()
+    except IntegrityError:
+        return
+
+
+async def associate_assistant_to_class(
+    conn: AsyncConnection,
+    student_id: int,
+    class_id: int,
+) -> Mapping | None:
+    try:
+        return (await conn.execute(
+            text(
+                '''
+                INSERT INTO class_assistants(id, class_id)
+                VALUES (:student_id, :class_id)
+                RETURNING id, class_id;
+                '''
+            ).bindparams(student_id=student_id, class_id=class_id)
+        )).mappings().one()
+    except IntegrityError:
+        return
+
+
+async def get_user_ref(conn: AsyncConnection, user_id: int) -> Mapping:
+    return (await conn.execute(
+        text(
+            '''
+            SELECT id, mail, name
+            FROM users
+            WHERE id = :user_id;
+            '''
+        ).bindparams(user_id=user_id)
+    )).mappings().one()
+
+
+async def get_class_professors(
+    conn: AsyncConnection,
+    class_id: int,
+) -> list[Mapping]:
+    return list((await conn.execute(
+        text(
+            '''
+            SELECT u.id, u.mail, u.name
+            FROM class_professors AS cp
+                JOIN users AS u ON u.id = cp.id
+            WHERE cp.class_id = :class_id
+            ORDER BY u.name, u.id;
+            '''
+        ).bindparams(class_id=class_id)
+    )).mappings().all())
+
+
+async def get_professor_classes(
+    conn: AsyncConnection,
+    professor_id: int,
+) -> list[Mapping]:
+    return list((await conn.execute(
+        text(
+            '''
+            SELECT c.id, c.title
+            FROM class_professors AS cp
+                JOIN classes AS c ON c.id = cp.class_id
+            WHERE cp.id = :professor_id
+            ORDER BY c.title, c.id;
+            '''
+        ).bindparams(professor_id=professor_id)
+    )).mappings().all())
+
+
+async def get_created_professor(
+    conn: AsyncConnection,
+    professor_id: int,
+) -> Mapping:
+    return (await conn.execute(
+        text(
+            '''
+            SELECT u.id, u.mail, u.name, u.role_id, r.title AS role_title
+            FROM users AS u
+                JOIN roles AS r ON r.id = u.role_id
+            WHERE u.id = :professor_id;
+            '''
+        ).bindparams(professor_id=professor_id)
+    )).mappings().one()
+
+
 async def get_current_user(
     conn: AsyncConnection,
     user_id: int
