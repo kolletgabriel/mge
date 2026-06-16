@@ -19,6 +19,15 @@ services:
       retries: 5
       start_period: 10s
 
+  mail:
+    image: axllent/mailpit:v1.28.0
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    expose:
+      - "1025"
+
   api:
     build: ./back
     restart: unless-stopped
@@ -26,6 +35,10 @@ services:
       UVICORN_UDS: /run/mge/uvicorn.sock
       DB_URL: postgresql+asyncpg://postgres:postgres@db:5432/postgres
       SESSION_SECRET: secret
+      MAIL_HOST: mail
+      MAIL_PORT: 1025
+      MAIL_FROM: noreply@mge.local
+      MAIL_START_TLS: "false"
     volumes:
       - unix_socket:/run/mge
     depends_on:
