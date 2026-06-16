@@ -7,7 +7,7 @@ from itsdangerous import TimestampSigner
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from back import Settings
+from back.settings import Settings
 
 TEST_SESSION_ID = UUID('00000000-0000-4000-8000-000000000000')
 

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from testcontainers.postgres import PostgresContainer
 
-from back import Settings
+from back.settings import Settings
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

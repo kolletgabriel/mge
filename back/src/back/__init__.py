@@ -1,4 +1,3 @@
-from os import getenv
 from typing import TYPE_CHECKING, TypedDict
 from contextlib import asynccontextmanager
 
@@ -7,20 +6,10 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from starlette.middleware.sessions import SessionMiddleware
 
 from .endpoints import admin, auth, user
+from .settings import Settings
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
-
-
-class Settings:
-    DB_URL = getenv('DB_URL', default='postgresql+asyncpg://postgres:postgres@db:5432/postgres')
-    SESSION_SECRET = getenv('SESSION_SECRET', default='secret')
-    MAIL_HOST = getenv('MAIL_HOST')
-    MAIL_PORT = int(getenv('MAIL_PORT', default='587'))
-    MAIL_USERNAME = getenv('MAIL_USERNAME')
-    MAIL_PASSWORD = getenv('MAIL_PASSWORD')
-    MAIL_FROM = getenv('MAIL_FROM', default='noreply@mge.local')
-    MAIL_START_TLS = getenv('MAIL_START_TLS', default='true').lower() == 'true'
 
 
 class State(TypedDict):

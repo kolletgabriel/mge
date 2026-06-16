@@ -2,10 +2,10 @@ from email.message import EmailMessage
 
 import aiosmtplib
 
+from back.settings import Settings
+
 
 async def send_plain_mail(to: str, subject: str, body: str) -> None:
-    from back import Settings
-
     if Settings.MAIL_HOST is None:
         raise RuntimeError('MAIL_HOST is not configured')
 
