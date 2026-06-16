@@ -69,10 +69,12 @@ class AssistantRef(BaseModel):
 class CreateClass(BaseModel):
     title: Title
     professor_ids: list[PositiveInt] = Field(default_factory=list)
+    assistant_ids: list[PositiveInt] = Field(default_factory=list)
 
 
 class CreatedClass(ClassRef):
     professors: list[ProfessorRef] = Field(default_factory=list)
+    assistants: list[AssistantRef] = Field(default_factory=list)
 
 
 class CreateProfessor(BaseModel):

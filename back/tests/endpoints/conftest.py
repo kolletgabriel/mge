@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from pytest import fixture, mark
+from pytest import fixture
 from sqlalchemy import text
 
 from back import app

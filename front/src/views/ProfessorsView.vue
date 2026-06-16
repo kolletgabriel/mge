@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import {
+  associateProfessor,
   createProfessor,
   fetchClasses,
   fetchProfessors,
@@ -15,10 +16,19 @@ const classes = ref<AdminClass[]>([])
 const name = ref('')
 const mail = ref('')
 const selectedClassIds = ref<number[]>([])
+const editingProfessor = ref<AdminProfessor | null>(null)
+const popupClassIds = ref<number[]>([])
 const loading = ref(false)
+const loadingPopup = ref(false)
 const saving = ref(false)
+const savingAssociations = ref(false)
 const message = ref('')
 const error = ref('')
+
+const availablePopupClasses = computed(() => {
+  const associatedIds = new Set(editingProfessor.value?.classes.map((class_) => class_.id) ?? [])
+  return classes.value.filter((class_) => !associatedIds.has(class_.id))
+})
 
 function initials(professor: AdminProfessor): string {
   return professor.name
@@ -63,6 +73,65 @@ async function submitProfessor(): Promise<void> {
     error.value = err instanceof Error ? err.message : 'Não foi possível cadastrar o professor.'
   } finally {
     saving.value = false
+  }
+}
+
+async function openProfessorPopup(professor: AdminProfessor): Promise<void> {
+  loadingPopup.value = true
+  popupClassIds.value = []
+  message.value = ''
+  error.value = ''
+
+  try {
+    const [professorList, classList] = await Promise.all([
+      fetchProfessors(),
+      fetchClasses(),
+    ])
+    professors.value = professorList
+    classes.value = classList
+    editingProfessor.value = professorList.find((freshProfessor) => freshProfessor.id === professor.id) ?? null
+
+    if (!editingProfessor.value) {
+      error.value = 'Não foi possível encontrar o professor selecionado.'
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Não foi possível carregar as associações.'
+  } finally {
+    loadingPopup.value = false
+  }
+}
+
+function closeProfessorPopup(): void {
+  editingProfessor.value = null
+  popupClassIds.value = []
+}
+
+async function submitProfessorAssociations(): Promise<void> {
+  if (!editingProfessor.value) {
+    return
+  }
+
+  savingAssociations.value = true
+  error.value = ''
+  message.value = ''
+
+  try {
+    const professorId = editingProfessor.value.id
+    await Promise.all(
+      popupClassIds.value.map((classId) => associateProfessor(Number(classId), professorId)),
+    )
+    const [professorList, classList] = await Promise.all([
+      fetchProfessors(),
+      fetchClasses(),
+    ])
+    professors.value = professorList
+    classes.value = classList
+    closeProfessorPopup()
+    message.value = 'Associações atualizadas.'
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Não foi possível atualizar as associações.'
+  } finally {
+    savingAssociations.value = false
   }
 }
 
@@ -114,12 +183,20 @@ onMounted(loadData)
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
         <p v-if="loading" class="empty">Carregando professores...</p>
+        <p v-else-if="loadingPopup" class="empty">Atualizando associações...</p>
         <p v-else-if="professors.length === 0" class="empty">
           Nenhum professor cadastrado ainda.
         </p>
         <table v-else>
           <tbody>
-            <tr v-for="professor in professors" :key="professor.id">
+            <tr
+              v-for="professor in professors"
+              :key="professor.id"
+              class="clickable-row"
+              tabindex="0"
+              @click="openProfessorPopup(professor)"
+              @keyup.enter="openProfessorPopup(professor)"
+            >
               <td>
                 <div class="person">
                   <div class="avatar" aria-hidden="true">{{ initials(professor) }}</div>
@@ -136,6 +213,40 @@ onMounted(loadData)
           </tbody>
         </table>
       </section>
+
+      <div v-if="editingProfessor" class="modal-backdrop" @click.self="closeProfessorPopup">
+        <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="professor-modal-title">
+          <header>
+            <div>
+              <p class="eyebrow">Associações</p>
+              <h2 id="professor-modal-title">{{ editingProfessor.name }}</h2>
+            </div>
+            <button class="close-button" type="button" @click="closeProfessorPopup">Fechar</button>
+          </header>
+
+          <form class="entity-form" @submit.prevent="submitProfessorAssociations">
+            <label>
+              Associar disciplinas:
+              <select v-model="popupClassIds" multiple>
+                <option v-for="class_ in availablePopupClasses" :key="class_.id" :value="class_.id">
+                  {{ class_.title }}
+                </option>
+              </select>
+              <button
+                class="clear-selection"
+                type="button"
+                :disabled="popupClassIds.length === 0"
+                @click="popupClassIds = []"
+              >
+                Limpar disciplinas selecionadas
+              </button>
+            </label>
+            <button class="submit-button" type="submit" :disabled="savingAssociations">
+              {{ savingAssociations ? 'Salvando...' : 'Salvar associações' }}
+            </button>
+          </form>
+        </section>
+      </div>
     </main>
   </AppShell>
 </template>
@@ -151,6 +262,18 @@ onMounted(loadData)
   display: grid;
   gap: 1rem;
   padding: 1.25rem;
+}
+
+.modal-panel {
+  background: #fff;
+  border: 1px solid #d9dfeb;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.24);
+  display: grid;
+  gap: 1.25rem;
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+  padding: 1.25rem;
+  width: min(42rem, calc(100vw - 2rem));
 }
 
 header {
@@ -169,6 +292,11 @@ header {
 }
 
 h1 {
+  color: #032562;
+  margin: 0;
+}
+
+h2 {
   color: #032562;
   margin: 0;
 }
@@ -215,6 +343,16 @@ select {
 .submit-button:disabled {
   cursor: wait;
   opacity: 0.7;
+}
+
+.close-button {
+  background: #eef2f7;
+  border: 1px solid #c9d2df;
+  color: #314156;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.55rem 0.7rem;
 }
 
 .clear-selection {
@@ -267,6 +405,16 @@ tr {
   border-top: 1px solid #e2e7f0;
 }
 
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:focus,
+.clickable-row:hover {
+  background: #f4f6fb;
+  outline: none;
+}
+
 td {
   padding: 0.55rem 0;
 }
@@ -302,6 +450,17 @@ td {
 
 .right {
   text-align: right;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgb(3 37 98 / 0.48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 10;
 }
 
 @media (max-width: 760px) {

@@ -9,8 +9,15 @@ export type ProfessorRef = {
   name: string
 }
 
+export type StudentRef = {
+  id: number
+  mail: string
+  name: string
+}
+
 export type AdminClass = ClassRef & {
   professors: ProfessorRef[]
+  assistants: StudentRef[]
 }
 
 export type AdminProfessor = ProfessorRef & {
@@ -39,14 +46,23 @@ export async function fetchProfessors(): Promise<AdminProfessor[]> {
   return await parseJson(await fetch('/api/professors'))
 }
 
+export async function fetchStudents(): Promise<StudentRef[]> {
+  return await parseJson(await fetch('/api/students'))
+}
+
 export async function createClass(
   title: string,
   professorIds: number[],
+  assistantIds: number[],
 ): Promise<AdminClass> {
   return await parseJson(await fetch('/api/classes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, professor_ids: professorIds }),
+    body: JSON.stringify({
+      title,
+      professor_ids: professorIds,
+      assistant_ids: assistantIds,
+    }),
   }), 'Já existe uma disciplina com este título')
 }
 
@@ -60,4 +76,20 @@ export async function createProfessor(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, mail, class_ids: classIds }),
   }), 'Já existe um professor com este email')
+}
+
+export async function associateProfessor(classId: number, professorId: number): Promise<void> {
+  await parseJson(await fetch(`/api/classes/${classId}/professors`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ professor_id: professorId }),
+  }))
+}
+
+export async function associateAssistant(classId: number, studentId: number): Promise<void> {
+  await parseJson(await fetch(`/api/classes/${classId}/assistants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ student_id: studentId }),
+  }))
 }

@@ -9,6 +9,7 @@ from back.dependencies import AdminRequiredDep, ConnDep
 from back.models import (
     AssociateAssistant,
     AssociateProfessor,
+    AssistantRef,
     AssociatedAssistant,
     AssociatedProfessor,
     CreateClass,
@@ -27,6 +28,7 @@ async def list_classes(conn: ConnDep) -> list[Mapping]:
         {
             **class_,
             'professors': await db.get_class_professors(conn, class_['id']),
+            'assistants': await db.get_class_assistants(conn, class_['id']),
         }
         for class_ in await db.list_classes(conn)
     ]
@@ -47,10 +49,25 @@ async def create_class(conn: ConnDep, provided: CreateClass) -> Mapping:
         if relation is None:
             raise HTTPException(status_code=400)
 
+    for assistant_id in provided.assistant_ids:
+        relation = await db.associate_assistant_to_class(
+            conn,
+            assistant_id,
+            class_['id'],
+        )
+        if relation is None:
+            raise HTTPException(status_code=400)
+
     return {
         **class_,
         'professors': await db.get_class_professors(conn, class_['id']),
+        'assistants': await db.get_class_assistants(conn, class_['id']),
     }
+
+
+@router.get('/students', response_model=list[AssistantRef])
+async def list_students(conn: ConnDep) -> list[Mapping]:
+    return await db.list_students(conn)
 
 
 @router.get('/professors', response_model=list[CreatedProfessor])

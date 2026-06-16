@@ -117,6 +117,23 @@ async def get_class_professors(
     )).mappings().all())
 
 
+async def get_class_assistants(
+    conn: AsyncConnection,
+    class_id: int,
+) -> list[Mapping]:
+    return list((await conn.execute(
+        text(
+            '''
+            SELECT u.id, u.mail, u.name
+            FROM class_assistants AS ca
+                JOIN users AS u ON u.id = ca.id
+            WHERE ca.class_id = :class_id
+            ORDER BY u.name, u.id;
+            '''
+        ).bindparams(class_id=class_id)
+    )).mappings().all())
+
+
 async def get_professor_classes(
     conn: AsyncConnection,
     professor_id: int,
@@ -171,6 +188,19 @@ async def list_professors(conn: AsyncConnection) -> list[Mapping]:
                 JOIN roles AS r ON r.id = u.role_id
             WHERE u.role_id = 2
             ORDER BY u.name, u.id;
+            '''
+        )
+    )).mappings().all())
+
+
+async def list_students(conn: AsyncConnection) -> list[Mapping]:
+    return list((await conn.execute(
+        text(
+            '''
+            SELECT id, mail, name
+            FROM users
+            WHERE role_id = 1
+            ORDER BY name, id;
             '''
         )
     )).mappings().all())
