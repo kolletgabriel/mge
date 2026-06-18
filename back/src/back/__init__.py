@@ -20,9 +20,10 @@ class State(TypedDict):
 async def lifespan(_: FastAPI) -> AsyncIterator[State]:
     engine = create_async_engine(Settings.DB_URL)
 
-    yield {'db': engine}
-
-    await engine.dispose()
+    try:
+        yield {'db': engine}
+    finally:
+        await engine.dispose()
 
 
 app = FastAPI(root_path='/api', lifespan=lifespan)
