@@ -18,7 +18,18 @@ class State(TypedDict):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[State]:
+    from .db import create_user
+    from .hash_tools import hash_pw
+
     engine = create_async_engine(Settings.DB_URL)
+    async with engine.begin() as conn:
+        await create_user(
+            conn,
+            mail = Settings.MGE_ADMIN_SEED_MAIL,
+            name = Settings.MGE_ADMIN_SEED_NAME,
+            hashed_password = await hash_pw(Settings.MGE_ADMIN_SEED_PW),
+            role_id = 0
+        )
 
     try:
         yield {'db': engine}

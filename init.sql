@@ -209,9 +209,3 @@ VALUES
     (1, 'Aluno'),
     (2, 'Professor')
 ON CONFLICT DO NOTHING;
-
-
-INSERT INTO users(mail, name, hashed_password, role_id)
-VALUES
-    ('admin@admin.com', 'Administrador', '$argon2id$v=19$m=8,t=1,p=1$ouYiVdoURx4$Oc8DFg', 0)
-ON CONFLICT DO NOTHING;
