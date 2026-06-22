@@ -12,7 +12,7 @@ async def _get_db(req: Request) -> AsyncIterator[AsyncConnection]:
     async with req.state['db'].begin() as conn:
         yield conn
 
-ConnDep = Annotated[AsyncConnection, Depends(_get_db)]
+ConnDep = Annotated[AsyncConnection, Depends(_get_db, scope='function')]
 
 
 async def _raw_session(req: Request) -> dict[str, Any]:
