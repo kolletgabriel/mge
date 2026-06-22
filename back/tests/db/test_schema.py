@@ -46,6 +46,7 @@ async def test_schema_objs_exist(db_conn: AsyncConnection):
         'session_participants',
     } == set(tables)
     assert {
+        'class_user_refs',
         'current_users',
         'session_applicants_status'
     } == set(views)

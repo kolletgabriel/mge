@@ -113,6 +113,31 @@ CREATE TABLE IF NOT EXISTS session_participants (
 -- Views:
 
 
+CREATE OR REPLACE VIEW class_user_refs AS
+WITH cte AS (
+    SELECT class_id
+        ,id AS user_id
+        ,role_id
+    FROM class_professors
+    UNION ALL
+    SELECT class_id
+        ,id AS user_id
+        ,role_id
+    FROM class_assistants
+)
+SELECT cte.class_id
+    ,c.title AS class_title
+    ,cte.user_id
+    ,u.mail
+    ,u.name
+    ,cte.role_id
+    ,r.title AS role_title
+FROM cte
+    JOIN classes AS c ON c.id = cte.class_id
+    JOIN users AS u ON u.id = cte.user_id
+    JOIN roles AS r ON r.id = cte.role_id;
+
+
 CREATE OR REPLACE VIEW session_applicants_status AS
 WITH ranked AS (
     SELECT sa.id

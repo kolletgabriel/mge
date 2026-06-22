@@ -24,14 +24,7 @@ router = APIRouter(dependencies=[AdminRequiredDep])
 
 @router.get('/classes', response_model=list[CreatedClass])
 async def list_classes(conn: ConnDep) -> list[Mapping]:
-    return [
-        {
-            **class_,
-            'professors': await db.get_class_professors(conn, class_['id']),
-            'assistants': await db.get_class_assistants(conn, class_['id']),
-        }
-        for class_ in await db.list_classes(conn)
-    ]
+    return await db.list_created_classes(conn)
 
 
 @router.post('/classes', status_code=201, response_model=CreatedClass)
@@ -58,11 +51,7 @@ async def create_class(conn: ConnDep, provided: CreateClass) -> Mapping:
         if relation is None:
             raise HTTPException(status_code=400)
 
-    return {
-        **class_,
-        'professors': await db.get_class_professors(conn, class_['id']),
-        'assistants': await db.get_class_assistants(conn, class_['id']),
-    }
+    return await db.get_created_class(conn, class_['id'])
 
 
 @router.get('/students', response_model=list[AssistantRef])
@@ -72,13 +61,7 @@ async def list_students(conn: ConnDep) -> list[Mapping]:
 
 @router.get('/professors', response_model=list[CreatedProfessor])
 async def list_professors(conn: ConnDep) -> list[Mapping]:
-    return [
-        {
-            **professor,
-            'classes': await db.get_professor_classes(conn, professor['id']),
-        }
-        for professor in await db.list_professors(conn)
-    ]
+    return await db.list_created_professors(conn)
 
 
 @router.post('/professors', status_code=201, response_model=CreatedProfessor)
@@ -115,11 +98,7 @@ async def create_professor(
         f'Olá, {provided.name}.\n\nSua senha temporária é: {plain_pw}\n',
     )
 
-    professor = await db.get_created_professor(conn, professor_id)
-    return {
-        **professor,
-        'classes': await db.get_professor_classes(conn, professor_id),
-    }
+    return await db.get_created_professor_payload(conn, professor_id)
 
 
 @router.post(
