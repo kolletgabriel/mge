@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { ensureCurrentUser } from '@/auth'
+import AssistantsView from '@/views/AssistantsView.vue'
 import AuthView from '@/views/AuthView.vue'
 import ClassesView from '@/views/ClassesView.vue'
 import DashboardView from '@/views/DashboardView.vue'
@@ -38,6 +39,12 @@ const router = createRouter({
       path: '/disciplinas',
       name: 'classes',
       component: ClassesView,
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/monitores',
+      name: 'assistants',
+      component: AssistantsView,
       meta: { requiresAuth: true, requiresAdmin: true },
     },
   ],
