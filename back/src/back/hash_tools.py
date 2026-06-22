@@ -10,8 +10,10 @@ _dummy_pw = 'dummypassword'
 _dummy_hash = _ph.hash(_dummy_pw)
 
 
-async def hash_pw(provided_pw: SecretStr) -> str:
-    return await run_in_threadpool(_ph.hash, provided_pw.get_secret_value())
+async def hash_pw(provided_pw: SecretStr | str) -> str:
+    if isinstance(provided_pw, SecretStr):
+        return await run_in_threadpool(_ph.hash, provided_pw.get_secret_value())
+    return await run_in_threadpool(_ph.hash, provided_pw)
 
 
 async def matches(hashed_pw: str, provided_pw: SecretStr) -> bool:
