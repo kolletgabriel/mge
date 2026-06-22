@@ -8,7 +8,6 @@ from sqlalchemy import (
     SmallInteger,
     Table,
     Text,
-    bindparam,
     select,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
