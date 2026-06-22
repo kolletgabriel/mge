@@ -21,6 +21,7 @@ const title = ref('')
 const selectedProfessorIds = ref<number[]>([])
 const selectedAssistantIds = ref<number[]>([])
 const editingClass = ref<AdminClass | null>(null)
+const classPopupMode = ref<'current' | 'add'>('current')
 const popupProfessorIds = ref<number[]>([])
 const popupAssistantIds = ref<number[]>([])
 const loading = ref(false)
@@ -100,6 +101,7 @@ async function openClassPopup(class_: AdminClass): Promise<void> {
     professors.value = professorList
     students.value = studentList
     editingClass.value = classList.find((freshClass) => freshClass.id === class_.id) ?? null
+    classPopupMode.value = 'current'
 
     if (!editingClass.value) {
       error.value = 'Não foi possível encontrar a disciplina selecionada.'
@@ -113,6 +115,7 @@ async function openClassPopup(class_: AdminClass): Promise<void> {
 
 function closeClassPopup(): void {
   editingClass.value = null
+  classPopupMode.value = 'current'
   popupProfessorIds.value = []
   popupAssistantIds.value = []
 }
@@ -140,6 +143,10 @@ async function submitClassAssociations(): Promise<void> {
   } finally {
     savingAssociations.value = false
   }
+}
+
+function assistantCountLabel(class_: AdminClass): string {
+  return String(class_.assistants.length)
 }
 
 onMounted(loadData)
@@ -207,6 +214,13 @@ onMounted(loadData)
           Nenhuma disciplina cadastrada ainda.
         </p>
         <table v-else>
+          <thead>
+            <tr>
+              <th>Disciplina</th>
+              <th class="center">Monitores</th>
+              <th class="right">Professor</th>
+            </tr>
+          </thead>
           <tbody>
             <tr
               v-for="class_ in classes"
@@ -218,6 +232,9 @@ onMounted(loadData)
             >
               <td>
                 <strong>{{ class_.title }}</strong>
+              </td>
+              <td class="center">
+                {{ assistantCountLabel(class_) }}
               </td>
               <td class="right">
                 {{ class_.professors[0]?.name ?? 'Sem professor associado' }}
@@ -234,46 +251,94 @@ onMounted(loadData)
               <p class="eyebrow">Associações</p>
               <h2 id="class-modal-title">{{ editingClass.title }}</h2>
             </div>
+            <div class="mode-actions">
+              <button
+                class="mode-button"
+                :class="{ active: classPopupMode === 'current' }"
+                type="button"
+                @click="classPopupMode = 'current'"
+              >
+                Atuais
+              </button>
+              <button
+                class="mode-button"
+                :class="{ active: classPopupMode === 'add' }"
+                type="button"
+                @click="classPopupMode = 'add'"
+              >
+                Adicionar
+              </button>
+            </div>
             <button class="close-button" type="button" @click="closeClassPopup">Fechar</button>
           </header>
 
-          <form class="entity-form" @submit.prevent="submitClassAssociations">
-            <label>
-              Associar professores:
-              <select v-model="popupProfessorIds" multiple>
-                <option v-for="professor in availablePopupProfessors" :key="professor.id" :value="professor.id">
-                  {{ professor.name }} - {{ professor.mail }}
-                </option>
-              </select>
-              <button
-                class="clear-selection"
-                type="button"
-                :disabled="popupProfessorIds.length === 0"
-                @click="popupProfessorIds = []"
-              >
-                Limpar professores selecionados
+          <div class="modal-body">
+            <section v-if="classPopupMode === 'current'" class="association-summary">
+              <div>
+                <h3>Professores associados</h3>
+                <p v-if="editingClass.professors.length === 0" class="summary-empty">
+                  Nenhum professor associado.
+                </p>
+                <ul v-else class="association-list">
+                  <li v-for="professor in editingClass.professors" :key="professor.id">
+                    <strong>{{ professor.name }}</strong>
+                    <span>{{ professor.mail }}</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3>Monitores associados</h3>
+                <p v-if="editingClass.assistants.length === 0" class="summary-empty">
+                  Nenhum monitor associado.
+                </p>
+                <ul v-else class="association-list">
+                  <li v-for="assistant in editingClass.assistants" :key="assistant.id">
+                    <strong>{{ assistant.name }}</strong>
+                    <span>{{ assistant.mail }}</span>
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            <form v-else class="entity-form" @submit.prevent="submitClassAssociations">
+              <label>
+                Associar professores:
+                <select v-model="popupProfessorIds" multiple>
+                  <option v-for="professor in availablePopupProfessors" :key="professor.id" :value="professor.id">
+                    {{ professor.name }} - {{ professor.mail }}
+                  </option>
+                </select>
+                <button
+                  class="clear-selection"
+                  type="button"
+                  :disabled="popupProfessorIds.length === 0"
+                  @click="popupProfessorIds = []"
+                >
+                  Limpar professores selecionados
+                </button>
+              </label>
+              <label>
+                Associar monitores:
+                <select v-model="popupAssistantIds" multiple>
+                  <option v-for="student in availablePopupAssistants" :key="student.id" :value="student.id">
+                    {{ student.name }} - {{ student.mail }}
+                  </option>
+                </select>
+                <button
+                  class="clear-selection"
+                  type="button"
+                  :disabled="popupAssistantIds.length === 0"
+                  @click="popupAssistantIds = []"
+                >
+                  Limpar monitores selecionados
+                </button>
+              </label>
+              <button class="submit-button" type="submit" :disabled="savingAssociations">
+                {{ savingAssociations ? 'Salvando...' : 'Salvar associações' }}
               </button>
-            </label>
-            <label>
-              Associar monitores:
-              <select v-model="popupAssistantIds" multiple>
-                <option v-for="student in availablePopupAssistants" :key="student.id" :value="student.id">
-                  {{ student.name }} - {{ student.mail }}
-                </option>
-              </select>
-              <button
-                class="clear-selection"
-                type="button"
-                :disabled="popupAssistantIds.length === 0"
-                @click="popupAssistantIds = []"
-              >
-                Limpar monitores selecionados
-              </button>
-            </label>
-            <button class="submit-button" type="submit" :disabled="savingAssociations">
-              {{ savingAssociations ? 'Salvando...' : 'Salvar associações' }}
-            </button>
-          </form>
+            </form>
+          </div>
         </section>
       </div>
     </main>
@@ -297,12 +362,25 @@ onMounted(loadData)
   background: #fff;
   border: 1px solid #d9dfeb;
   box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.24);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1.25rem;
-  max-height: calc(100vh - 3rem);
-  overflow: auto;
+  max-height: min(36rem, calc(100vh - 3rem));
+  overflow: hidden;
   padding: 1.25rem;
-  width: min(42rem, calc(100vw - 2rem));
+  width: min(44rem, calc(100vw - 2rem));
+}
+
+.modal-panel > header {
+  border-bottom: 1px solid #d9dfeb;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  padding-bottom: 1rem;
+}
+
+.modal-body {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 header {
@@ -359,6 +437,7 @@ select {
 }
 
 .submit-button {
+  align-self: start;
   justify-self: center;
   background: #032562;
   border: 0;
@@ -382,6 +461,33 @@ select {
   font: inherit;
   font-weight: 800;
   padding: 0.55rem 0.7rem;
+}
+
+.mode-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+  justify-self: center;
+}
+
+.mode-button {
+  background: transparent;
+  border: 0;
+  color: #032562;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 0.32rem 0.5rem;
+}
+
+.mode-button.active {
+  background: #032562;
+  color: #fff;
+}
+
+.close-button {
+  justify-self: end;
 }
 
 .clear-selection {
@@ -427,11 +533,31 @@ select {
 
 table {
   border-collapse: collapse;
+  margin-top: 0.45rem;
   width: 100%;
 }
 
 tr {
   border-top: 1px solid #e2e7f0;
+}
+
+thead tr {
+  border-top: 0;
+}
+
+th {
+  color: #526276;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  padding: 0 0 0.7rem;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+th.center,
+th.right {
+  color: #526276;
+  font-size: 0.78rem;
 }
 
 .clickable-row {
@@ -448,19 +574,69 @@ td {
   padding: 0.7rem 0;
 }
 
+.center {
+  color: #526276;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .right {
   color: #526276;
   font-size: 0.9rem;
   text-align: right;
 }
 
+.association-summary {
+  display: grid;
+  gap: 1rem;
+}
+
+h3 {
+  color: #10213d;
+  font-size: 1.05rem;
+  font-weight: 900;
+  margin: 0 0 0.6rem;
+}
+
+.summary-empty {
+  background: #f4f6fb;
+  color: #526276;
+  margin: 0;
+  padding: 0.7rem;
+}
+
+.association-list {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.association-list li {
+  border-top: 1px solid #e2e7f0;
+  padding-top: 0.6rem;
+}
+
+.association-list strong,
+.association-list span {
+  display: block;
+}
+
+.association-list span {
+  color: #526276;
+  font-size: 0.9rem;
+  margin-top: 0.15rem;
+}
+
 .modal-backdrop {
-  align-items: center;
+  align-items: flex-start;
   background: rgb(3 37 98 / 0.48);
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: 1rem;
+  padding: max(1.5rem, calc((100vh - 36rem) / 2)) 1rem 1rem;
   position: fixed;
   z-index: 10;
 }
@@ -472,6 +648,19 @@ td {
 
   .clear-selection {
     grid-column: 1;
+  }
+
+  .mode-actions {
+    justify-self: start;
+  }
+
+  .modal-panel > header {
+    gap: 0.75rem;
+    grid-template-columns: 1fr;
+  }
+
+  .close-button {
+    justify-self: start;
   }
 }
 </style>

@@ -17,6 +17,7 @@ const name = ref('')
 const mail = ref('')
 const selectedClassIds = ref<number[]>([])
 const editingProfessor = ref<AdminProfessor | null>(null)
+const professorPopupMode = ref<'current' | 'add'>('current')
 const popupClassIds = ref<number[]>([])
 const loading = ref(false)
 const loadingPopup = ref(false)
@@ -90,6 +91,7 @@ async function openProfessorPopup(professor: AdminProfessor): Promise<void> {
     professors.value = professorList
     classes.value = classList
     editingProfessor.value = professorList.find((freshProfessor) => freshProfessor.id === professor.id) ?? null
+    professorPopupMode.value = 'current'
 
     if (!editingProfessor.value) {
       error.value = 'Não foi possível encontrar o professor selecionado.'
@@ -103,6 +105,7 @@ async function openProfessorPopup(professor: AdminProfessor): Promise<void> {
 
 function closeProfessorPopup(): void {
   editingProfessor.value = null
+  professorPopupMode.value = 'current'
   popupClassIds.value = []
 }
 
@@ -188,6 +191,12 @@ onMounted(loadData)
           Nenhum professor cadastrado ainda.
         </p>
         <table v-else>
+          <thead>
+            <tr>
+              <th>Professor</th>
+              <th class="right">Disciplina</th>
+            </tr>
+          </thead>
           <tbody>
             <tr
               v-for="professor in professors"
@@ -221,30 +230,62 @@ onMounted(loadData)
               <p class="eyebrow">Associações</p>
               <h2 id="professor-modal-title">{{ editingProfessor.name }}</h2>
             </div>
+            <div class="mode-actions">
+              <button
+                class="mode-button"
+                :class="{ active: professorPopupMode === 'current' }"
+                type="button"
+                @click="professorPopupMode = 'current'"
+              >
+                Atuais
+              </button>
+              <button
+                class="mode-button"
+                :class="{ active: professorPopupMode === 'add' }"
+                type="button"
+                @click="professorPopupMode = 'add'"
+              >
+                Adicionar
+              </button>
+            </div>
             <button class="close-button" type="button" @click="closeProfessorPopup">Fechar</button>
           </header>
 
-          <form class="entity-form" @submit.prevent="submitProfessorAssociations">
-            <label>
-              Associar disciplinas:
-              <select v-model="popupClassIds" multiple>
-                <option v-for="class_ in availablePopupClasses" :key="class_.id" :value="class_.id">
-                  {{ class_.title }}
-                </option>
-              </select>
-              <button
-                class="clear-selection"
-                type="button"
-                :disabled="popupClassIds.length === 0"
-                @click="popupClassIds = []"
-              >
-                Limpar disciplinas selecionadas
+          <div class="modal-body">
+            <section v-if="professorPopupMode === 'current'" class="association-summary">
+              <h3>Disciplinas associadas</h3>
+              <p v-if="editingProfessor.classes.length === 0" class="summary-empty">
+                Nenhuma disciplina associada.
+              </p>
+              <ul v-else class="association-list">
+                <li v-for="class_ in editingProfessor.classes" :key="class_.id">
+                  <strong>{{ class_.title }}</strong>
+                </li>
+              </ul>
+            </section>
+
+            <form v-else class="entity-form" @submit.prevent="submitProfessorAssociations">
+              <label>
+                Associar disciplinas:
+                <select v-model="popupClassIds" multiple>
+                  <option v-for="class_ in availablePopupClasses" :key="class_.id" :value="class_.id">
+                    {{ class_.title }}
+                  </option>
+                </select>
+                <button
+                  class="clear-selection"
+                  type="button"
+                  :disabled="popupClassIds.length === 0"
+                  @click="popupClassIds = []"
+                >
+                  Limpar disciplinas selecionadas
+                </button>
+              </label>
+              <button class="submit-button" type="submit" :disabled="savingAssociations">
+                {{ savingAssociations ? 'Salvando...' : 'Salvar associações' }}
               </button>
-            </label>
-            <button class="submit-button" type="submit" :disabled="savingAssociations">
-              {{ savingAssociations ? 'Salvando...' : 'Salvar associações' }}
-            </button>
-          </form>
+            </form>
+          </div>
         </section>
       </div>
     </main>
@@ -268,12 +309,25 @@ onMounted(loadData)
   background: #fff;
   border: 1px solid #d9dfeb;
   box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.24);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1.25rem;
-  max-height: calc(100vh - 3rem);
-  overflow: auto;
+  max-height: min(36rem, calc(100vh - 3rem));
+  overflow: hidden;
   padding: 1.25rem;
-  width: min(42rem, calc(100vw - 2rem));
+  width: min(40rem, calc(100vw - 2rem));
+}
+
+.modal-panel > header {
+  border-bottom: 1px solid #d9dfeb;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  padding-bottom: 1rem;
+}
+
+.modal-body {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 header {
@@ -330,6 +384,7 @@ select {
 }
 
 .submit-button {
+  align-self: start;
   justify-self: center;
   background: #032562;
   border: 0;
@@ -353,6 +408,33 @@ select {
   font: inherit;
   font-weight: 800;
   padding: 0.55rem 0.7rem;
+}
+
+.mode-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+  justify-self: center;
+}
+
+.mode-button {
+  background: transparent;
+  border: 0;
+  color: #032562;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 0.32rem 0.5rem;
+}
+
+.mode-button.active {
+  background: #032562;
+  color: #fff;
+}
+
+.close-button {
+  justify-self: end;
 }
 
 .clear-selection {
@@ -398,11 +480,30 @@ select {
 
 table {
   border-collapse: collapse;
+  margin-top: 0.45rem;
   width: 100%;
 }
 
 tr {
   border-top: 1px solid #e2e7f0;
+}
+
+thead tr {
+  border-top: 0;
+}
+
+th {
+  color: #526276;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  padding: 0 0 0.7rem;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+th.right {
+  color: #526276;
+  font-size: 0.78rem;
 }
 
 .clickable-row {
@@ -452,13 +553,46 @@ td {
   text-align: right;
 }
 
+.association-summary {
+  display: grid;
+  gap: 0.5rem;
+}
+
+h3 {
+  color: #10213d;
+  font-size: 1.05rem;
+  font-weight: 900;
+  margin: 0;
+}
+
+.summary-empty {
+  background: #f4f6fb;
+  color: #526276;
+  margin: 0;
+  padding: 0.7rem;
+}
+
+.association-list {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.association-list li {
+  border-top: 1px solid #e2e7f0;
+  padding-top: 0.6rem;
+}
+
 .modal-backdrop {
-  align-items: center;
+  align-items: flex-start;
   background: rgb(3 37 98 / 0.48);
   display: flex;
   inset: 0;
   justify-content: center;
-  padding: 1rem;
+  padding: max(1.5rem, calc((100vh - 36rem) / 2)) 1rem 1rem;
   position: fixed;
   z-index: 10;
 }
@@ -470,6 +604,19 @@ td {
 
   .clear-selection {
     grid-column: 1;
+  }
+
+  .mode-actions {
+    justify-self: start;
+  }
+
+  .modal-panel > header {
+    gap: 0.75rem;
+    grid-template-columns: 1fr;
+  }
+
+  .close-button {
+    justify-self: start;
   }
 }
 </style>
