@@ -63,15 +63,22 @@ CREATE TABLE IF NOT EXISTS class_assistants (
 CREATE TABLE IF NOT EXISTS review_sessions (
     id INT8 GENERATED ALWAYS AS IDENTITY,
     class_id INT8 NOT NULL,
-    starts_at TIMESTAMPTZ NOT NULL,
-    ends_at TIMESTAMPTZ NOT NULL,
+    starts_at TIMESTAMPTZ,
+    ends_at TIMESTAMPTZ,
     location TEXT NOT NULL DEFAULT 'online',
     max_participants INT2 NOT NULL DEFAULT 5,
 
     PRIMARY KEY (id),
     UNIQUE (id, class_id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
-    CONSTRAINT must_end_after_start CHECK (ends_at > starts_at),
+    CONSTRAINT valid_schedule_window CHECK (
+        (starts_at IS NULL
+            AND ends_at IS NULL)
+        OR
+        (starts_at IS NOT NULL
+            AND ends_at IS NOT NULL
+            AND ends_at > starts_at)
+    ),
     CONSTRAINT must_have_max_participants CHECK (max_participants > 0)
 );
 
