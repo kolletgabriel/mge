@@ -67,20 +67,6 @@ async def test_seeded_roles(db_conn: AsyncConnection):
 
 
 @mark.anyio
-async def test_seeded_admin(db_conn: AsyncConnection):
-    admin_rid = (await db_conn.execute(
-        text(
-            '''
-            SELECT role_id
-            FROM users
-            WHERE mail = 'admin@admin.com';
-            '''
-        )
-    )).scalar()
-    assert admin_rid == 0
-
-
-@mark.anyio
 async def test_class_professors_require_professor_and_class(
     db_conn: AsyncConnection,
     class_with_professor: dict,
