@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from back import db
-from back.models import SessionData
+from back.models import SessionData, ReviewSessionRequest
 
 
 async def _get_db(req: Request) -> AsyncIterator[AsyncConnection]:
@@ -34,6 +34,31 @@ async def _require_session(sess: RawSessionDep, conn: ConnDep) -> SessionData:
 
 CurrentSessionDep = Annotated[SessionData, Depends(_require_session)]
 SessionRequiredDep = Depends(_require_session)
+
+
+async def _require_sched_perms(
+    conn: ConnDep,
+    sess: CurrentSessionDep,
+    provided: ReviewSessionRequest,
+) -> None:
+    access = await db.get_sched_perms(
+        conn,
+        sess.uid,
+        sess.rid,
+        provided.class_id,
+    )
+
+    if access == 'missing':
+        raise HTTPException(status_code=404)
+    if access == 'forbidden':
+        raise HTTPException(status_code=403)
+    if sess.rid == 1 and any(
+        assistant_id != sess.uid
+        for assistant_id in provided.assistant_ids
+    ):
+        raise HTTPException(status_code=403)
+
+SchedPermsDep = Depends(_require_sched_perms)
 
 
 class RolePermission:

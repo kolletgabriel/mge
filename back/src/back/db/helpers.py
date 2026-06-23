@@ -6,6 +6,8 @@ from sqlalchemy import Table, select, update
 from sqlalchemy.exc import IntegrityError
 
 from .schema import (
+    admin_class_schedule_access_select,
+    assistant_class_schedule_access_select,
     auth_sessions,
     class_assistants,
     class_professors,
@@ -17,6 +19,11 @@ from .schema import (
     created_professors_from_rows,
     created_professors_select,
     current_users,
+    professor_class_schedule_access_select,
+    review_session_payload_from_rows,
+    review_session_payload_select,
+    review_sessions,
+    session_assistants,
     users,
     roles,
 )
@@ -244,6 +251,153 @@ async def list_students(conn: AsyncConnection) -> list[Mapping]:
     )
 
     return list((await conn.execute(stmt)).mappings().all())
+
+
+async def list_schedulable_classes(
+    conn: AsyncConnection,
+    user_id: int,
+    role_id: Literal[0, 1, 2],
+) -> list[dict[str, Any]]:
+    assistants = class_user_refs.alias('assistants')
+    source = classes.outerjoin(
+        assistants,
+        (assistants.c.class_id == classes.c.id)
+        & (assistants.c.role_id == 1)
+    )
+    if role_id == 1:
+        source = source.join(
+            class_assistants,
+            (class_assistants.c.class_id == classes.c.id)
+            & (class_assistants.c.id == user_id)
+        )
+    elif role_id == 2:
+        source = source.join(
+            class_professors,
+            (class_professors.c.class_id == classes.c.id)
+            & (class_professors.c.id == user_id)
+        )
+
+    stmt = (
+        select(
+            classes.c.id,
+            classes.c.title,
+            assistants.c.user_id.label('assistant_id'),
+            assistants.c.mail.label('assistant_mail'),
+            assistants.c.name.label('assistant_name'),
+        ).select_from(source).order_by(
+            classes.c.title,
+            classes.c.id,
+            assistants.c.name,
+            assistants.c.user_id,
+        )
+    )
+
+    if role_id == 1:
+        stmt = stmt.where(assistants.c.user_id == user_id)
+
+    rows = (await conn.execute(stmt)).mappings().all()
+    by_class: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        class_ = by_class.setdefault(
+            row['id'],
+            {'id': row['id'], 'title': row['title'], 'assistants': []},
+        )
+        if row['assistant_id'] is not None:
+            class_['assistants'].append({
+                'id': row['assistant_id'],
+                'mail': row['assistant_mail'],
+                'name': row['assistant_name'],
+            })
+
+    return list(by_class.values())
+
+
+async def get_sched_perms(
+    conn: AsyncConnection,
+    user_id: int,
+    role_id: Literal[0, 1, 2],
+    class_id: int,
+) -> Literal['missing', 'forbidden', 'allowed']:
+    if role_id == 0:
+        stmt = admin_class_schedule_access_select(class_id)
+    elif role_id == 1:
+        stmt = assistant_class_schedule_access_select(user_id, class_id)
+    else:
+        stmt = professor_class_schedule_access_select(user_id, class_id)
+
+    row = (await conn.execute(stmt)).first()
+
+    if row is None:
+        return 'missing'
+    if role_id == 0 or row[0] is not None:
+        return 'allowed'
+    return 'forbidden'
+
+
+async def list_class_assistant_ids(
+    conn: AsyncConnection,
+    class_id: int,
+) -> set[int]:
+    stmt = select(class_assistants.c.id).where(
+        class_assistants.c.class_id == class_id
+    )
+
+    return set((await conn.execute(stmt)).scalars().all())
+
+
+async def create_review_session(
+    conn: AsyncConnection,
+    class_id: int,
+    starts_at: datetime | None,
+    ends_at: datetime | None,
+    location: str,
+    max_participants: int,
+) -> Mapping | None:
+    try:
+        return (await conn.execute(
+            review_sessions.insert().values(
+                class_id=class_id,
+                starts_at=starts_at,
+                ends_at=ends_at,
+                location=location,
+                max_participants=max_participants,
+            ).returning(review_sessions.c.id)
+        )).mappings().one()
+    except IntegrityError:
+        return
+
+
+async def associate_assistant_to_session(
+    conn: AsyncConnection,
+    session_id: int,
+    class_id: int,
+    assistant_id: int,
+) -> Mapping | None:
+    try:
+        return (await conn.execute(
+            session_assistants.insert().values(
+                id=assistant_id,
+                class_id=class_id,
+                session_id=session_id,
+            ).returning(
+                session_assistants.c.id,
+                session_assistants.c.class_id,
+                session_assistants.c.session_id,
+            )
+        )).mappings().one()
+    except IntegrityError:
+        return
+
+
+async def get_review_session_payload(
+    conn: AsyncConnection,
+    session_id: int,
+) -> dict[str, Any]:
+    rows = (await conn.execute(
+        review_session_payload_select(session_id)
+    )).mappings().all()
+
+    return review_session_payload_from_rows(rows)
 
 
 async def get_current_user(

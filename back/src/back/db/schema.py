@@ -2,6 +2,7 @@ from typing import Any, Literal, Mapping, Sequence
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     MetaData,
@@ -57,6 +58,23 @@ class_assistants = Table(
     Column('role_id', SmallInteger()),
     Column('class_id', BigInteger(), primary_key=True),
 )
+review_sessions = Table(
+    'review_sessions',
+    metadata,
+    Column('id', BigInteger(), primary_key=True),
+    Column('class_id', BigInteger()),
+    Column('starts_at', DateTime(timezone=True)),
+    Column('ends_at', DateTime(timezone=True)),
+    Column('location', Text()),
+    Column('max_participants', SmallInteger()),
+)
+session_assistants = Table(
+    'session_assistants',
+    metadata,
+    Column('id', BigInteger(), primary_key=True),
+    Column('class_id', BigInteger()),
+    Column('session_id', BigInteger(), primary_key=True),
+)
 current_users = Table(
     'current_users',
     metadata,
@@ -78,6 +96,22 @@ class_user_refs = Table(
     Column('role_id', SmallInteger()),
     Column('role_title', Text()),
 )
+review_session_refs = Table(
+    'review_session_refs',
+    metadata,
+    Column('id', BigInteger()),
+    Column('starts_at', DateTime(timezone=True)),
+    Column('ends_at', DateTime(timezone=True)),
+    Column('location', Text()),
+    Column('max_participants', SmallInteger()),
+    Column('class_id', BigInteger()),
+    Column('class_title', Text()),
+    Column('assistant_id', BigInteger()),
+    Column('assistant_mail', Text()),
+    Column('assistant_name', Text()),
+    Column('scheduled', Boolean()),
+    Column('archived', Boolean()),
+)
 
 
 def class_user_ref_select(class_id: int, role_id: Literal[1, 2]):
@@ -95,6 +129,34 @@ def class_user_ref_select(class_id: int, role_id: Literal[1, 2]):
             refs.name,
             refs.user_id
         )
+    )
+
+
+def admin_class_schedule_access_select(class_id: int):
+    return select(classes.c.id).where(classes.c.id == class_id)
+
+
+def assistant_class_schedule_access_select(user_id: int, class_id: int):
+    return (
+        select(class_assistants.c.id).select_from(
+            classes.outerjoin(
+                class_assistants,
+                (class_assistants.c.class_id == classes.c.id)
+                & (class_assistants.c.id == user_id)
+            )
+        ).where(classes.c.id == class_id)
+    )
+
+
+def professor_class_schedule_access_select(user_id: int, class_id: int):
+    return (
+        select(class_professors.c.id).select_from(
+            classes.outerjoin(
+                class_professors,
+                (class_professors.c.class_id == classes.c.id)
+                & (class_professors.c.id == user_id)
+            )
+        ).where(classes.c.id == class_id)
     )
 
 
@@ -211,3 +273,60 @@ def created_professors_from_rows(
             })
 
     return list(by_professor.values())
+
+
+def review_session_payload_select(session_id: int):
+    refs = review_session_refs.c
+
+    return (
+        select(
+            refs.id,
+            refs.starts_at,
+            refs.ends_at,
+            refs.location,
+            refs.max_participants,
+            refs.class_id,
+            refs.class_title,
+            refs.assistant_id,
+            refs.assistant_mail,
+            refs.assistant_name,
+            refs.scheduled,
+            refs.archived,
+        ).where(
+            refs.id == session_id
+        ).order_by(
+            refs.assistant_name,
+            refs.assistant_id
+        )
+    )
+
+
+def review_session_payload_from_rows(
+    rows: Sequence[Mapping]
+) -> dict[str, Any]:
+    first = rows[0]
+    session = {
+        'id': first['id'],
+        'class': {
+            'id': first['class_id'],
+            'title': first['class_title'],
+        },
+        'starts_at': first['starts_at'],
+        'ends_at': first['ends_at'],
+        'location': first['location'],
+        'max_participants': first['max_participants'],
+        'assistants': [],
+        'scheduled': first['scheduled'],
+        'archived': first['archived'],
+    }
+
+    for row in rows:
+        if row['assistant_id'] is None:
+            continue
+        session['assistants'].append({
+            'id': row['assistant_id'],
+            'mail': row['assistant_mail'],
+            'name': row['assistant_name'],
+        })
+
+    return session

@@ -1,6 +1,7 @@
-from typing import Annotated, Literal
+from datetime import datetime
+from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, Field, PositiveInt, SecretStr, StringConstraints, UUID4
+from pydantic import AfterValidator, BaseModel, Field, PositiveInt, SecretStr, StringConstraints, UUID4, model_validator
 
 
 Email = Annotated[
@@ -30,6 +31,10 @@ Title = Annotated[
     )
 ]
 Password = Annotated[SecretStr, Field(min_length=8, max_length=128)]
+AssistantIds = Annotated[
+    list[PositiveInt],
+    AfterValidator(lambda ids: list(dict.fromkeys(ids)))
+]
 
 
 class Credentials(BaseModel):
@@ -105,6 +110,46 @@ class AssociateProfessor(BaseModel):
 class AssociatedProfessor(BaseModel):
     class_id: PositiveInt
     professor: ProfessorRef
+
+
+class SchedulableClass(ClassRef):
+    assistants: list[AssistantRef] = Field(default_factory=list)
+
+
+class ReviewSessionRequest(BaseModel):
+    class_id: PositiveInt
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    location: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+    ] = 'online'
+    max_participants: PositiveInt = 5
+    assistant_ids: AssistantIds = Field(default_factory=list)
+
+    @model_validator(mode='after')
+    def validate_schedule_window(self) -> Self:
+        if (self.starts_at is None) != (self.ends_at is None):
+            raise ValueError('starts_at and ends_at must be provided together')
+
+        if (self.starts_at is not None
+                and self.ends_at is not None
+                and self.ends_at <= self.starts_at):
+            raise ValueError('ends_at must be after starts_at')
+
+        return self
+
+
+class ReviewSession(BaseModel):
+    id: PositiveInt
+    class_: ClassRef = Field(alias='class')
+    starts_at: datetime | None
+    ends_at: datetime | None
+    location: str
+    max_participants: PositiveInt
+    assistants: list[AssistantRef] = Field(default_factory=list)
+    scheduled: bool
+    archived: bool
 
 
 class CurrentUserBase(BaseModel):

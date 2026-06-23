@@ -167,6 +167,41 @@ SELECT id
 FROM ranked;
 
 
+CREATE OR REPLACE VIEW review_session_refs AS
+WITH assistant_counts AS (
+    SELECT session_id
+        ,count(*) AS assistant_count
+    FROM session_assistants
+    GROUP BY session_id
+)
+SELECT rs.id
+    ,rs.starts_at
+    ,rs.ends_at
+    ,rs.location
+    ,rs.max_participants
+    ,rs.class_id
+    ,c.title AS class_title
+    ,sa.id AS assistant_id
+    ,u.mail AS assistant_mail
+    ,u.name AS assistant_name
+    ,(
+        rs.starts_at IS NOT NULL
+        AND rs.ends_at IS NOT NULL
+        AND COALESCE(ac.assistant_count, 0) > 0
+    ) AS scheduled
+    ,(
+        rs.starts_at IS NOT NULL
+        AND rs.ends_at IS NOT NULL
+        AND COALESCE(ac.assistant_count, 0) > 0
+        AND rs.ends_at <= now()
+    ) AS archived
+FROM review_sessions AS rs
+    JOIN classes AS c ON c.id = rs.class_id
+    LEFT JOIN assistant_counts AS ac ON ac.session_id = rs.id
+    LEFT JOIN session_assistants AS sa ON sa.session_id = rs.id
+    LEFT JOIN users AS u ON u.id = sa.id;
+
+
 CREATE OR REPLACE VIEW current_users AS
 WITH professor_classes AS (
     SELECT cp.id
