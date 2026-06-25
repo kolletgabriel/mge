@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from starlette.middleware.sessions import SessionMiddleware
 
-from .endpoints import admin, auth, user
+from .endpoints import admin, auth, review_sessions, user
 from .settings import Settings
 
 if TYPE_CHECKING:
@@ -52,5 +52,6 @@ async def lifespan(_: FastAPI) -> AsyncIterator[State]:
 app = FastAPI(root_path='/api', lifespan=lifespan)
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(review_sessions.router)
 app.include_router(user.router)
 app.add_middleware(SessionMiddleware, secret_key=Settings.SESSION_SECRET, max_age=None)
