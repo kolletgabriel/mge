@@ -16,13 +16,11 @@ class State(TypedDict):
     db: AsyncEngine
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[State]:
-    from .db import create_user
-    from .hash_tools import hash_pw
+async def ensure_adm(engine: AsyncEngine) -> None:
+    from .db import create_user, get_login_user
 
-    engine = create_async_engine(Settings.DB_URL)
-    async with engine.begin() as conn:
+    async def _create_adm(conn):
+        from .hash_tools import hash_pw
         await create_user(
             conn,
             mail = Settings.MGE_ADMIN_SEED_MAIL,
@@ -31,7 +29,21 @@ async def lifespan(_: FastAPI) -> AsyncIterator[State]:
             role_id = 0
         )
 
+    async with engine.begin() as conn:
+        adm = await get_login_user(conn, Settings.MGE_ADMIN_SEED_MAIL)
+        if adm is None:
+            await _create_adm(conn)
+        elif adm['role_id'] != 0:
+            from uuid import uuid4
+            Settings.MGE_ADMIN_SEED_MAIL = f'{uuid4()}_admin@mge.com'
+            await _create_adm(conn)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[State]:
+    engine = create_async_engine(Settings.DB_URL)
     try:
+        await ensure_adm(engine)
         yield {'db': engine}
     finally:
         await engine.dispose()
