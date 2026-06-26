@@ -26,20 +26,9 @@ async def scheduling_options(
 )
 async def create_review_session(
     conn: ConnDep,
-    sess: CurrentSessionDep,
     provided: ReviewSessionRequest,
 ) -> Mapping:
     assistant_ids = provided.assistant_ids
-    if sess.rid != 1:
-        class_assistant_ids = await db.list_class_assistant_ids(
-            conn,
-            provided.class_id,
-        )
-        if any(
-            assistant_id not in class_assistant_ids
-            for assistant_id in assistant_ids
-        ):
-            raise HTTPException(status_code=400)
 
     session = await db.create_review_session(
         conn,
@@ -52,14 +41,12 @@ async def create_review_session(
     if session is None:
         raise HTTPException(status_code=400)
 
-    for assistant_id in assistant_ids:
-        relation = await db.associate_assistant_to_session(
-            conn,
-            session['id'],
-            provided.class_id,
-            assistant_id,
-        )
-        if relation is None:
-            raise HTTPException(status_code=400)
+    if not await db.associate_class_assistants_to_session(
+        conn,
+        session['id'],
+        provided.class_id,
+        assistant_ids,
+    ):
+        raise HTTPException(status_code=400)
 
     return await db.get_review_session_payload(conn, session['id'])

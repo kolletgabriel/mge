@@ -33,23 +33,21 @@ async def create_class(conn: ConnDep, provided: CreateClass) -> Mapping:
     if class_ is None:
         raise HTTPException(status_code=409)
 
-    for professor_id in provided.professor_ids:
-        relation = await db.associate_professor_to_class(
-            conn,
-            professor_id,
-            class_['id'],
-        )
-        if relation is None:
-            raise HTTPException(status_code=400)
+    if not await db.associate_users_to_class(
+        conn,
+        'professor',
+        provided.professor_ids,
+        class_['id'],
+    ):
+        raise HTTPException(status_code=400)
 
-    for assistant_id in provided.assistant_ids:
-        relation = await db.associate_assistant_to_class(
-            conn,
-            assistant_id,
-            class_['id'],
-        )
-        if relation is None:
-            raise HTTPException(status_code=400)
+    if not await db.associate_users_to_class(
+        conn,
+        'assistant',
+        provided.assistant_ids,
+        class_['id'],
+    ):
+        raise HTTPException(status_code=400)
 
     return await db.get_created_class(conn, class_['id'])
 
@@ -82,14 +80,13 @@ async def create_professor(
     if professor_id is None:
         raise HTTPException(status_code=409)
 
-    for class_id in provided.class_ids:
-        relation = await db.associate_professor_to_class(
-            conn,
-            professor_id,
-            class_id,
-        )
-        if relation is None:
-            raise HTTPException(status_code=400)
+    if not await db.associate_classes_to_user(
+        conn,
+        'professor',
+        professor_id,
+        provided.class_ids,
+    ):
+        raise HTTPException(status_code=400)
 
     background_tasks.add_task(
         mail.send_plain_mail,
@@ -111,12 +108,13 @@ async def associate_assistant(
     class_id: int,
     provided: AssociateAssistant,
 ) -> Mapping:
-    relation = await db.associate_assistant_to_class(
+    associated = await db.associate_users_to_class(
         conn,
-        provided.student_id,
+        'assistant',
+        [provided.student_id],
         class_id,
     )
-    if relation is None:
+    if not associated:
         raise HTTPException(status_code=400)
 
     return {
@@ -135,12 +133,13 @@ async def associate_professor(
     class_id: int,
     provided: AssociateProfessor,
 ) -> Mapping:
-    relation = await db.associate_professor_to_class(
+    associated = await db.associate_users_to_class(
         conn,
-        provided.professor_id,
+        'professor',
+        [provided.professor_id],
         class_id,
     )
-    if relation is None:
+    if not associated:
         raise HTTPException(status_code=400)
 
     return {

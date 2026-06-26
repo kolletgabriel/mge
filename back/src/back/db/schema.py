@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    literal,
     MetaData,
     SmallInteger,
     Table,
@@ -114,21 +115,46 @@ review_session_refs = Table(
 )
 
 
-def class_user_ref_select(class_id: int, role_id: Literal[1, 2]):
-    refs = class_user_refs.c
-
+def associate_users_to_class_insert(
+    table: Table,
+    role_id: Literal[1, 2],
+    user_ids: list[int],
+    class_id: int,
+):
     return (
-        select(
-            refs.user_id.label('id'),
-            refs.mail,
-            refs.name,
-        ).where(
-            (refs.class_id == class_id)
-            & (refs.role_id == role_id)
-        ).order_by(
-            refs.name,
-            refs.user_id
-        )
+        table.insert().from_select(
+            ['id', 'class_id'],
+            select(
+                users.c.id,
+                literal(class_id),
+            ).where(
+                users.c.role_id == role_id,
+                users.c.id.in_(user_ids),
+            )
+        ).returning(table.c.id)
+    )
+
+
+def associate_classes_to_user_insert(
+    table: Table,
+    role_id: Literal[1, 2],
+    user_id: int,
+    class_ids: list[int],
+):
+    return (
+        table.insert().from_select(
+            ['id', 'class_id'],
+            select(
+                users.c.id,
+                classes.c.id,
+            ).select_from(
+                users.join(classes, literal(True))
+            ).where(
+                users.c.id == user_id,
+                users.c.role_id == role_id,
+                classes.c.id.in_(class_ids),
+            )
+        ).returning(table.c.class_id)
     )
 
 

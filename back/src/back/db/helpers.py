@@ -2,16 +2,17 @@ from datetime import datetime, timezone
 from typing import Any, Literal, Mapping, TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import Table, select, update
+from sqlalchemy import Table, literal, select, update
 from sqlalchemy.exc import IntegrityError
 
 from .schema import (
     admin_class_schedule_access_select,
+    associate_classes_to_user_insert,
+    associate_users_to_class_insert,
     assistant_class_schedule_access_select,
     auth_sessions,
     class_assistants,
     class_professors,
-    class_user_ref_select,
     class_user_refs,
     classes,
     created_classes_from_rows,
@@ -25,7 +26,6 @@ from .schema import (
     review_sessions,
     session_assistants,
     users,
-    roles,
 )
 
 if TYPE_CHECKING:
@@ -68,44 +68,62 @@ async def create_class(conn: AsyncConnection, title: str) -> Mapping | None:
         return
 
 
-async def associate_user_to_class(
+def class_association_target(
+    which: Literal['assistant', 'professor']
+) -> tuple[Table, Literal[1, 2]]:
+    if which == 'assistant':
+        return class_assistants, 1
+    return class_professors, 2
+
+
+async def associate_users_to_class(
     conn: AsyncConnection,
-    table: Table,
-    user_id: int,
+    which: Literal['assistant', 'professor'],
+    user_ids: list[int],
     class_id: int,
-) -> Mapping | None:
+) -> bool:
+    if not user_ids:
+        return True
+
+    table, role_id = class_association_target(which)
+    stmt = associate_users_to_class_insert(
+        table,
+        role_id,
+        user_ids,
+        class_id,
+    )
+
     try:
-        return (await conn.execute(
-            table.insert().values(
-                id=user_id,
-                class_id=class_id
-            ).returning(
-                table.c.id,
-                table.c.class_id
-            )
-        )).mappings().one()
+        inserted = (await conn.execute(stmt)).scalars().all()
     except IntegrityError:
-        return
+        return False
+
+    return len(inserted) == len(user_ids)
 
 
-async def associate_professor_to_class(
+async def associate_classes_to_user(
     conn: AsyncConnection,
-    professor_id: int,
-    class_id: int,
-) -> Mapping | None:
-    return await associate_user_to_class(
-        conn, class_professors, professor_id, class_id
+    which: Literal['assistant', 'professor'],
+    user_id: int,
+    class_ids: list[int],
+) -> bool:
+    if not class_ids:
+        return True
+
+    table, role_id = class_association_target(which)
+    stmt = associate_classes_to_user_insert(
+        table,
+        role_id,
+        user_id,
+        class_ids,
     )
 
+    try:
+        inserted = (await conn.execute(stmt)).scalars().all()
+    except IntegrityError:
+        return False
 
-async def associate_assistant_to_class(
-    conn: AsyncConnection,
-    student_id: int,
-    class_id: int,
-) -> Mapping | None:
-    return await associate_user_to_class(
-        conn, class_assistants, student_id, class_id
-    )
+    return len(inserted) == len(class_ids)
 
 
 async def get_user_ref(conn: AsyncConnection, user_id: int) -> Mapping:
@@ -118,59 +136,6 @@ async def get_user_ref(conn: AsyncConnection, user_id: int) -> Mapping:
     )
 
     return (await conn.execute(stmt)).mappings().one()
-
-
-async def get_class_users(
-    conn: AsyncConnection,
-    class_id: int,
-    role_id: Literal[1, 2],
-) -> list[Mapping]:
-    result = await conn.execute(
-        class_user_ref_select(class_id, role_id)
-    )
-
-    return list(result.mappings().all())
-
-
-async def get_class_professors(
-    conn: AsyncConnection,
-    class_id: int,
-) -> list[Mapping]:
-    return await get_class_users(conn, class_id, 2)
-
-
-async def get_class_assistants(
-    conn: AsyncConnection,
-    class_id: int,
-) -> list[Mapping]:
-    return await get_class_users(conn, class_id, 1)
-
-
-async def get_professor_classes(
-    conn: AsyncConnection,
-    professor_id: int,
-) -> list[Mapping]:
-    refs = class_user_refs.c
-    stmt = (
-        select(
-            refs.class_id.label('id'),
-            refs.class_title.label('title'),
-        ).where(
-            (refs.user_id == professor_id)
-            & (refs.role_id == 2)
-        ).order_by(
-            refs.class_title,
-            refs.class_id
-        )
-    )
-
-    return list((await conn.execute(stmt)).mappings().all())
-
-
-async def list_classes(conn: AsyncConnection) -> list[Mapping]:
-    stmt = classes.select().order_by(classes.c.title, classes.c.id)
-
-    return list((await conn.execute(stmt)).mappings().all())
 
 
 async def get_created_class(
@@ -190,29 +155,6 @@ async def list_created_classes(conn: AsyncConnection) -> list[dict[str, Any]]:
     )).mappings().all()
 
     return created_classes_from_rows(rows)
-
-
-async def list_professors(conn: AsyncConnection) -> list[Mapping]:
-    stmt = (
-        select(
-            users.c.id,
-            users.c.mail,
-            users.c.name,
-            users.c.role_id,
-            roles.c.title.label('role_title'),
-        ).select_from(
-            users.join(
-                roles, (roles.c.id == users.c.role_id)
-            )
-        ).where(
-            users.c.role_id == 2
-        ).order_by(
-            users.c.name,
-            users.c.id
-        )
-    )
-
-    return list((await conn.execute(stmt)).mappings().all())
 
 
 async def get_created_professor_payload(
@@ -334,17 +276,6 @@ async def get_sched_perms(
     return 'forbidden'
 
 
-async def list_class_assistant_ids(
-    conn: AsyncConnection,
-    class_id: int,
-) -> set[int]:
-    stmt = select(class_assistants.c.id).where(
-        class_assistants.c.class_id == class_id
-    )
-
-    return set((await conn.execute(stmt)).scalars().all())
-
-
 async def create_review_session(
     conn: AsyncConnection,
     class_id: int,
@@ -367,26 +298,35 @@ async def create_review_session(
         return
 
 
-async def associate_assistant_to_session(
+async def associate_class_assistants_to_session(
     conn: AsyncConnection,
     session_id: int,
     class_id: int,
-    assistant_id: int,
-) -> Mapping | None:
-    try:
-        return (await conn.execute(
-            session_assistants.insert().values(
-                id=assistant_id,
-                class_id=class_id,
-                session_id=session_id,
-            ).returning(
-                session_assistants.c.id,
-                session_assistants.c.class_id,
-                session_assistants.c.session_id,
+    assistant_ids: list[int],
+) -> bool:
+    if not assistant_ids:
+        return True
+
+    stmt = (
+        session_assistants.insert().from_select(
+            ['id', 'class_id', 'session_id'],
+            select(
+                class_assistants.c.id,
+                class_assistants.c.class_id,
+                literal(session_id),
+            ).where(
+                class_assistants.c.class_id == class_id,
+                class_assistants.c.id.in_(assistant_ids),
             )
-        )).mappings().one()
+        ).returning(session_assistants.c.id)
+    )
+
+    try:
+        inserted = (await conn.execute(stmt)).scalars().all()
     except IntegrityError:
-        return
+        return False
+
+    return len(inserted) == len(assistant_ids)
 
 
 async def get_review_session_payload(
