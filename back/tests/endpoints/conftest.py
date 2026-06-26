@@ -3,9 +3,11 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from pytest import fixture
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from back import app
+from back.db.schema import auth_sessions, users
+from back.settings import Settings
 
 from .. import utils
 from ..utils import sign_session_data, TEST_SESSION_ID
@@ -36,13 +38,22 @@ def signed_malformed_session_token() -> str:
 @fixture
 async def valid_auth_session(db_engine: AsyncEngine) -> AsyncIterator[None]:
     async with db_engine.begin() as conn:
+        root_adm_id = (await conn.execute(
+            text(
+                '''
+                SELECT id
+                FROM users
+                WHERE mail = :mail;
+                '''
+            ).bindparams(mail=Settings.MGE_ADMIN_SEED_MAIL)
+        )).scalar()
         await conn.execute(
             text(
                 '''
                 INSERT INTO auth_sessions(id, user_id)
-                VALUES (:sid, 1);
+                VALUES (:sid, :uid);
                 '''
-            ).bindparams(sid=TEST_SESSION_ID)
+            ).bindparams(sid=TEST_SESSION_ID, uid=root_adm_id)
         )
 
     yield
@@ -61,13 +72,22 @@ async def valid_auth_session(db_engine: AsyncEngine) -> AsyncIterator[None]:
 @fixture
 async def revoked_auth_session(db_engine: AsyncEngine) -> AsyncIterator[None]:
     async with db_engine.begin() as conn:
+        root_adm_id = (await conn.execute(
+            text(
+                '''
+                SELECT id
+                FROM users
+                WHERE mail = :mail;
+                '''
+            ).bindparams(mail=Settings.MGE_ADMIN_SEED_MAIL)
+        )).scalar()
         await conn.execute(
             text(
                 '''
                 INSERT INTO auth_sessions(id, user_id, revoked_at)
-                VALUES (:sid, 1, now());
+                VALUES (:sid, :uid, now());
                 '''
-            ).bindparams(sid=TEST_SESSION_ID)
+            ).bindparams(sid=TEST_SESSION_ID, uid=root_adm_id)
         )
 
     yield
@@ -86,15 +106,34 @@ async def revoked_auth_session(db_engine: AsyncEngine) -> AsyncIterator[None]:
 @fixture
 async def authed_test_client(
     test_client: TestClient,
-    signed_session_token: str,
-    valid_auth_session: None
+    db_engine: AsyncEngine,
 ) -> AsyncIterator[TestClient]:
-    _ = valid_auth_session
-    test_client.cookies['session'] = signed_session_token
+    async with db_engine.begin() as conn:
+        admin = (await conn.execute(
+            select(users.c.id, users.c.role_id).where(
+                users.c.mail == Settings.MGE_ADMIN_SEED_MAIL
+            )
+        )).mappings().one()
+        await conn.execute(
+            auth_sessions.insert().values(
+                id=TEST_SESSION_ID,
+                user_id=admin['id'],
+            )
+        )
+
+    test_client.cookies['session'] = sign_session_data({
+        'uid': admin['id'],
+        'rid': admin['role_id'],
+        'sid': str(TEST_SESSION_ID),
+    })
 
     yield test_client
 
     test_client.cookies.pop('session', None)
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            auth_sessions.delete().where(auth_sessions.c.id == TEST_SESSION_ID)
+        )
 
 
 @fixture

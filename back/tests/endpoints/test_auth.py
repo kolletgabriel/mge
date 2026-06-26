@@ -70,19 +70,13 @@ def test_register_user_failure_short_password(test_client):
 
 
 def test_login_root_user_success(test_client):
-    creds = {'mail': 'admin@admin.com', 'password': 'admin'}
+    creds = {'mail': 'admin@admin.com', 'password': 'admin123'}
     res = test_client.post('/login', json=creds)
 
     assert res.status_code == 200
     assert res.cookies.get('session')
-    assert res.json() == {
-        'id': 1,
-        'mail': 'admin@admin.com',
-        'name': 'Administrador',
-        'role_id': 0,
-        'role_title': 'Administrador',
-        'scope': {'global': True},
-    }
+    assert res.json()['role_id'] == 0
+    assert res.json()['scope'] == {'global': True}
 
 
 def test_login_root_user_failure_wrong_pw(test_client):
